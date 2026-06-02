@@ -29,7 +29,8 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 public final class GeckoLibHelper {
-    private static final Map<AnimatableManager<?>, Map<String, BoundEmitter>> LOCATOR_EMITTERS = new WeakHashMap<>();
+    private static final Map<AnimatableManager<?>, Map<LocatorParticleKey, BoundEmitter>> LOCATOR_EMITTERS = new WeakHashMap<>();
+    private static final ThreadLocal<RenderPassInfo<?>> CURRENT_RENDER_PASS = new ThreadLocal<>();
 
     private GeckoLibHelper() {
     }
@@ -66,14 +67,14 @@ public final class GeckoLibHelper {
             return;
         }
 
-        Map<String, BoundEmitter> emitters = LOCATOR_EMITTERS.get(manager);
+        Map<LocatorParticleKey, BoundEmitter> emitters = LOCATOR_EMITTERS.get(manager);
         if (emitters == null || emitters.isEmpty()) {
             return;
         }
 
-        Iterator<Map.Entry<String, BoundEmitter>> iterator = emitters.entrySet().iterator();
+        Iterator<Map.Entry<LocatorParticleKey, BoundEmitter>> iterator = emitters.entrySet().iterator();
         while (iterator.hasNext()) {
-            Map.Entry<String, BoundEmitter> entry = iterator.next();
+            Map.Entry<LocatorParticleKey, BoundEmitter> entry = iterator.next();
             BoundEmitter bound = entry.getValue();
             ParticleEmitter emitter = PSGameClient.LOADER.getEmitter(bound.emitterId());
             if (emitter == null || emitter.isRemoved()) {
@@ -81,7 +82,17 @@ public final class GeckoLibHelper {
                 continue;
             }
 
-            renderPassInfo.addLocatorPositionListener(entry.getKey(), (worldPos, modelPos, localPos) -> updateEmitterPosition(emitter, bound, worldPos, modelPos, localPos));
+            attachLocatorListener(renderPassInfo, bound, emitter);
+        }
+    }
+
+    public static void enterRenderPass(RenderPassInfo<?> renderPassInfo) {
+        CURRENT_RENDER_PASS.set(renderPassInfo);
+    }
+
+    public static void exitRenderPass(RenderPassInfo<?> renderPassInfo) {
+        if (CURRENT_RENDER_PASS.get() == renderPassInfo) {
+            CURRENT_RENDER_PASS.remove();
         }
     }
 
@@ -91,7 +102,7 @@ public final class GeckoLibHelper {
             return;
         }
 
-        Map<String, BoundEmitter> emitters = LOCATOR_EMITTERS.remove(manager);
+        Map<LocatorParticleKey, BoundEmitter> emitters = LOCATOR_EMITTERS.remove(manager);
         if (emitters != null) {
             for (BoundEmitter bound : emitters.values()) {
                 PSGameClient.LOADER.removeEmitter(bound.emitterId(), false);
@@ -118,10 +129,12 @@ public final class GeckoLibHelper {
             return null;
         }
 
-        Map<String, BoundEmitter> emitters = LOCATOR_EMITTERS.computeIfAbsent(manager, ignored -> new Object2ObjectOpenHashMap<>());
-        BoundEmitter bound = emitters.get(locator);
+        Map<LocatorParticleKey, BoundEmitter> emitters = LOCATOR_EMITTERS.computeIfAbsent(manager, ignored -> new Object2ObjectOpenHashMap<>());
+        LocatorParticleKey key = new LocatorParticleKey(locator, particleId);
+        BoundEmitter bound = emitters.get(key);
         ParticleEmitter current = bound == null ? null : PSGameClient.LOADER.getEmitter(bound.emitterId());
-        if (current != null && !current.isRemoved() && particleId.equals(current.particleId)) {
+        if (current != null && !current.isRemoved()) {
+            attachCurrentRenderPassListener(bound, current);
             return current;
         }
 
@@ -133,7 +146,15 @@ public final class GeckoLibHelper {
         PSGameClient.LOADER.addEmitter(emitter, false);
         attachContext(emitter, context);
         emitter.parentMode = ParticleEmitter.ParentMode.LOCATOR;
-        emitters.put(locator, new BoundEmitter(emitter.id, context.basePos(), context.entity(), context.blockEntity()));
+        BoundEmitter newBound = new BoundEmitter(emitter.id, locator, particleId, context.basePos(), context.entity(), context.blockEntity());
+        emitters.put(key, newBound);
+        attachCurrentRenderPassListener(newBound, emitter);
+        PSDiagnostics.infoFirstN("geckolib-emitter-create:" + locator + ":" + particleId, 8, "GeckoLib locator emitter created runtimeId={} particle={} locator={} basePos={}",
+                emitter.id,
+                particleId,
+                locator,
+                context.basePos()
+        );
         return emitter;
     }
 
@@ -148,10 +169,24 @@ public final class GeckoLibHelper {
     private static void updateEmitterPosition(ParticleEmitter emitter, BoundEmitter bound, @Nullable Vec3 worldPos, @Nullable Vec3 modelPos, @Nullable Vec3 localPos) {
         Vec3 target = worldPos != null ? worldPos : modelPos != null ? bound.basePos().add(modelPos.scale(1.0 / 16.0)) : localPos;
         if (target == null) {
+            PSDiagnostics.warnFirstN("geckolib-locator-missing:" + bound.locator() + ":" + bound.particleId(), 8, "GeckoLib locator update missing position runtimeId={} particle={} locator={}",
+                    emitter.id,
+                    bound.particleId(),
+                    bound.locator()
+            );
             return;
         }
 
         emitter.setPos(target);
+        PSDiagnostics.infoFirstN("geckolib-locator-update:" + bound.locator() + ":" + bound.particleId(), 8, "GeckoLib locator update runtimeId={} particle={} locator={} target={} worldPos={} modelPos={} localPos={}",
+                emitter.id,
+                bound.particleId(),
+                bound.locator(),
+                target,
+                worldPos,
+                modelPos,
+                localPos
+        );
         if (bound.entity() != null) {
             Vec3 relative = target.subtract(bound.entity().position());
             emitter.parentPosition = new Vector3f((float) relative.x, (float) relative.y, (float) relative.z);
@@ -160,6 +195,17 @@ public final class GeckoLibHelper {
             Vec3 relative = target.subtract(base);
             emitter.parentPosition = new Vector3f((float) relative.x, (float) relative.y, (float) relative.z);
         }
+    }
+
+    private static void attachCurrentRenderPassListener(BoundEmitter bound, ParticleEmitter emitter) {
+        RenderPassInfo<?> renderPassInfo = CURRENT_RENDER_PASS.get();
+        if (renderPassInfo != null) {
+            attachLocatorListener(renderPassInfo, bound, emitter);
+        }
+    }
+
+    private static void attachLocatorListener(RenderPassInfo<?> renderPassInfo, BoundEmitter bound, ParticleEmitter emitter) {
+        renderPassInfo.addLocatorPositionListener(bound.locator(), (worldPos, modelPos, localPos) -> updateEmitterPosition(emitter, bound, worldPos, modelPos, localPos));
     }
 
     private static @Nullable ParticleContext createContext(GeoAnimatable animatable, GeoRenderState renderState) {
@@ -201,6 +247,9 @@ public final class GeckoLibHelper {
     private record ParticleContext(Level level, Vec3 basePos, VariableTable variableTable, @Nullable Entity entity, @Nullable BlockEntity blockEntity) {
     }
 
-    private record BoundEmitter(int emitterId, Vec3 basePos, @Nullable Entity entity, @Nullable BlockEntity blockEntity) {
+    private record LocatorParticleKey(String locator, Identifier particleId) {
+    }
+
+    private record BoundEmitter(int emitterId, String locator, Identifier particleId, Vec3 basePos, @Nullable Entity entity, @Nullable BlockEntity blockEntity) {
     }
 }

@@ -1,6 +1,5 @@
 package org.mesdag.particlestorm.particle;
 
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.Particle;
@@ -35,7 +34,8 @@ import java.util.Optional;
 
 public class MolangParticleInstance extends SingleQuadParticle implements IMolangParticleInstance {
     public static final int FULL_LIGHT = 0xF000F0;
-    private static final boolean IS_SODIUM_LOADED = FabricLoader.getInstance().isModLoaded("sodium");
+    private static final float MIN_RENDER_SIZE = 1.0E-4F;
+    private static final int MAX_RECTANGLE_SEGMENTS = 24;
 
     protected final ParticlePreset preset;
     protected ParticleVariableTable vars;
@@ -381,13 +381,10 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
 
     @Override
     public float getQuadSize(float partialTicks) {
-        if (billboardSize == null || billboardSize.length < 2) {
-            return super.getQuadSize(partialTicks);
-        }
-        float width = Math.abs(billboardSize[0]);
-        float height = Math.abs(billboardSize[1]);
+        float width = getBillboardWidth(partialTicks);
+        float height = getBillboardHeight(partialTicks);
         float size = Math.max(width, height);
-        return size > 0.0F ? size : super.getQuadSize(partialTicks);
+        return size > MIN_RENDER_SIZE ? size : super.getQuadSize(partialTicks);
     }
 
     @Override
@@ -402,10 +399,55 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
 
     @Override
     protected void extractRotatedQuad(QuadParticleRenderState state, Quaternionf orientation, float x, float y, float z, float partialTick) {
-        if (IS_SODIUM_LOADED) {
-            state.add(getLayer(), x, y, z, orientation.x, orientation.y, orientation.z, orientation.w, getQuadSize(partialTick), getU0(), getU1(), getV0(), getV1(), ARGB.colorFromFloat(this.alpha, this.rCol, this.gCol, this.bCol), getLightCoords(partialTick));
-        } else {
-            super.extractRotatedQuad(state, orientation, x, y, z, partialTick);
+        float width = getBillboardWidth(partialTick);
+        float height = getBillboardHeight(partialTick);
+        int color = ARGB.colorFromFloat(this.alpha, this.rCol, this.gCol, this.bCol);
+        int light = getLightCoords(partialTick);
+
+        if (width <= MIN_RENDER_SIZE || height <= MIN_RENDER_SIZE || Math.abs(width - height) <= MIN_RENDER_SIZE) {
+            float size = Math.max(width, height);
+            if (size <= MIN_RENDER_SIZE) {
+                size = super.getQuadSize(partialTick);
+            }
+            state.add(getLayer(), x, y, z, orientation.x, orientation.y, orientation.z, orientation.w, size, getU0(), getU1(), getV0(), getV1(), color, light);
+            return;
+        }
+
+        addSegmentedRectangularQuad(state, orientation, x, y, z, width, height, color, light);
+    }
+
+    private float getBillboardWidth(float partialTick) {
+        return billboardSize == null || billboardSize.length < 2 ? super.getQuadSize(partialTick) : Math.abs(billboardSize[0]);
+    }
+
+    private float getBillboardHeight(float partialTick) {
+        return billboardSize == null || billboardSize.length < 2 ? super.getQuadSize(partialTick) : Math.abs(billboardSize[1]);
+    }
+
+    private void addSegmentedRectangularQuad(QuadParticleRenderState state, Quaternionf orientation, float x, float y, float z, float width, float height, int color, int light) {
+        boolean splitWidth = width >= height;
+        float major = splitWidth ? width : height;
+        float minor = splitWidth ? height : width;
+        int segments = Math.max(1, Math.min(MAX_RECTANGLE_SEGMENTS, (int) Math.ceil(major / Math.max(minor, MIN_RENDER_SIZE))));
+        Vector3f axis = new Vector3f(splitWidth ? 1.0F : 0.0F, splitWidth ? 0.0F : 1.0F, 0.0F).rotate(orientation);
+
+        float u0 = getU0();
+        float u1 = getU1();
+        float v0 = getV0();
+        float v1 = getV1();
+        float startOffset = -major + minor;
+        float endOffset = major - minor;
+
+        for (int segment = 0; segment < segments; segment++) {
+            float segmentStart = (float) segment / segments;
+            float segmentEnd = (float) (segment + 1) / segments;
+            float offset = segments == 1 ? 0.0F : Mth.lerp((float) segment / (segments - 1), startOffset, endOffset);
+            float segmentU0 = splitWidth ? Mth.lerp(segmentStart, u0, u1) : u0;
+            float segmentU1 = splitWidth ? Mth.lerp(segmentEnd, u0, u1) : u1;
+            float segmentV0 = splitWidth ? v0 : Mth.lerp(segmentStart, v0, v1);
+            float segmentV1 = splitWidth ? v1 : Mth.lerp(segmentEnd, v0, v1);
+
+            state.add(getLayer(), x + axis.x * offset, y + axis.y * offset, z + axis.z * offset, orientation.x, orientation.y, orientation.z, orientation.w, minor, segmentU0, segmentU1, segmentV0, segmentV1, color, light);
         }
     }
 

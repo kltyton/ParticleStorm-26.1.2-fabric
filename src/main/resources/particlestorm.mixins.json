@@ -12,6 +12,7 @@
   ],
   "client": [
     "integration.geckolib.AnimationControllerMixin",
+    "integration.geckolib.AnimationTimelineMixin",
     "integration.geckolib.GeoReplacedEntityRendererMixin",
     "integration.geckolib.MolangQueriesMixin",
     "integration.geckolib.RenderPassInfoMixin"

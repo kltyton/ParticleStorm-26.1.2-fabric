@@ -13,7 +13,6 @@ public abstract class MolangParticleLoadEvent {
         return executor;
     }
 
-    /// In Background Executor {@link net.minecraft.Util#backgroundExecutor()}
     public static class Pre extends MolangParticleLoadEvent {
         public Pre(Executor executor) {
             super(executor);
