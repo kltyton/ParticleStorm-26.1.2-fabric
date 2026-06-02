@@ -1,0 +1,47 @@
+package org.mesdag.particlestorm.data.event;
+
+import com.mojang.datafixers.util.Either;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import org.mesdag.particlestorm.ParticleStorm;
+import org.mesdag.particlestorm.api.IEventNode;
+import org.mesdag.particlestorm.api.MolangInstance;
+import org.mesdag.particlestorm.data.molang.MolangExp;
+import org.mesdag.particlestorm.data.molang.compiler.MolangParser;
+
+import java.util.function.Function;
+
+public final class NodeMolangExp extends MolangExp implements IEventNode {
+    public static final Codec<NodeMolangExp> DIRECT_CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.STRING.fieldOf("exp").forGetter(NodeMolangExp::getExpStr),
+            Codec.BOOL.lenientOptionalFieldOf("log", false).forGetter(NodeMolangExp::shouldLog)
+    ).apply(instance, NodeMolangExp::new));
+    public static final Codec<NodeMolangExp> CODEC = Codec.either(DIRECT_CODEC, Codec.STRING).xmap(
+            either -> either.map(Function.identity(), s -> new NodeMolangExp(s, false)),
+            e -> e.log ? Either.right(e.expStr) : Either.left(e)
+    );
+    private final boolean log;
+
+    public NodeMolangExp(String expStr, boolean log) {
+        super(expStr);
+        this.log = log;
+    }
+
+    public boolean shouldLog() {
+        return log;
+    }
+
+    @Override
+    public void execute(MolangInstance instance) {
+        if (variable == null && !expStr.isEmpty() && !expStr.isBlank()) {
+            MolangParser parser = new MolangParser(instance.getVars());
+            this.variable = parser.compileMolang(expStr);
+        }
+        if (variable != null) {
+            double v = variable.get(instance);
+            if (log) {
+                ParticleStorm.LOGGER.info("{}[{}]: {}={}", instance.getIdentity(), instance.getPosition(), expStr, v);
+            }
+        }
+    }
+}

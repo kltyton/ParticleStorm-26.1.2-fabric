@@ -1,0 +1,27 @@
+package org.mesdag.particlestorm.data.description;
+
+import com.mojang.serialization.Codec;
+import net.minecraft.util.StringRepresentable;
+
+import java.util.Locale;
+
+public enum DescriptionMaterial implements StringRepresentable {
+    TERRAIN_SHEET,
+    PARTICLE_SHEET_OPAQUE,
+    PARTICLE_SHEET_TRANSLUCENT,
+    PARTICLE_SHEET_LIT,
+    CUSTOM,
+    NO_RENDER,
+
+    particles_alpha,
+    particles_blend,
+    particles_add,
+    particles_opaque;
+
+    public static final Codec<DescriptionMaterial> CODEC = StringRepresentable.fromEnum(DescriptionMaterial::values);
+
+    @Override
+    public String getSerializedName() {
+        return name().toLowerCase(Locale.ROOT);
+    }
+}

@@ -1,0 +1,556 @@
+package org.mesdag.particlestorm.particle;
+
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Camera;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.particle.Particle;
+import net.minecraft.client.particle.ParticleProvider;
+import net.minecraft.client.particle.ParticleRenderType;
+import net.minecraft.client.particle.SingleQuadParticle;
+import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.core.particles.ParticleLimit;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.ARGB;
+import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
+import org.mesdag.particlestorm.PSDiagnostics;
+import org.mesdag.particlestorm.api.IEventNode;
+import org.mesdag.particlestorm.api.IMolangParticleInstance;
+import org.mesdag.particlestorm.api.IParticleComponent;
+import org.mesdag.particlestorm.data.component.ParticleMotionCollision;
+import org.mesdag.particlestorm.data.molang.VariableTable;
+import org.mesdag.particlestorm.mixed.ITextureAtlasSprite;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+public class MolangParticleInstance extends SingleQuadParticle implements IMolangParticleInstance {
+    public static final int FULL_LIGHT = 0xF000F0;
+    private static final boolean IS_SODIUM_LOADED = FabricLoader.getInstance().isModLoaded("sodium");
+
+    protected final ParticlePreset preset;
+    protected ParticleVariableTable vars;
+    protected final float originX;
+    protected final float originY;
+
+    protected Vector3f acceleration = new Vector3f();
+    protected Vector3f facingDirection = new Vector3f();
+    protected Vector3f initialSpeed = new Vector3f();
+    protected float xRot = 0.0F;
+    protected float yRot = 0.0F;
+    protected float xRotO = 0.0F;
+    protected float yRotO = 0.0F;
+    protected float rolld = 0.0F;
+    protected boolean hasCollision = false;
+    protected float collisionDrag = 0.0F;
+    protected float coefficientOfRestitution = 0.0F;
+    protected boolean expireOnContact = false;
+
+    protected final double particleRandom1;
+    protected final double particleRandom2;
+    protected final double particleRandom3;
+    protected final double particleRandom4;
+    protected List<IParticleComponent> components = List.of();
+    protected ParticleEmitter emitter;
+
+    protected final float scaleU;
+    protected final float scaleV;
+    protected float[] billboardSize = new float[2];
+    protected float[] uvSize;
+    protected float[] uvStep;
+    protected int maxFrame = 1;
+    protected int currentFrame = 0;
+    protected float[] UV;
+
+    protected boolean insideKillPlane;
+    protected ParticleLimit particleGroup;
+    protected int lastTimeline = 0;
+
+    public MolangParticleInstance(ParticlePreset preset, ClientLevel level, double x, double y, double z, RandomSource random) {
+        super(level, x, y, z, preset.effect.description.parameters().getTexture());
+        this.friction = 1.0F;
+        this.preset = preset;
+        this.originX = ((ITextureAtlasSprite) sprite).particlestorm$getOriginX();
+        this.originY = ((ITextureAtlasSprite) sprite).particlestorm$getOriginY();
+        this.scaleU = sprite.contents().width() * preset.invTextureWidth;
+        this.scaleV = sprite.contents().height() * preset.invTextureHeight;
+
+        this.particleRandom1 = random.nextDouble();
+        this.particleRandom2 = random.nextDouble();
+        this.particleRandom3 = random.nextDouble();
+        this.particleRandom4 = random.nextDouble();
+    }
+
+    @Override
+    public int getAge() {
+        return age;
+    }
+
+    @Override
+    public void setEmitter(ParticleEmitter emitter) {
+        this.emitter = emitter;
+        this.vars = new ParticleVariableTable(preset.vars, emitter.vars);
+    }
+
+    @Override
+    public ParticlePreset getPreset() {
+        return preset;
+    }
+
+    @Override
+    public TextureAtlasSprite getSprite() {
+        return sprite;
+    }
+
+    @Override
+    public Vector3f getAcceleration() {
+        return acceleration;
+    }
+
+    @Override
+    public Vector3f getFacingDirection() {
+        return facingDirection;
+    }
+
+    @Override
+    public Vector3f getInitialSpeed() {
+        return initialSpeed;
+    }
+
+    @Override
+    public void setXRot(float x) {
+        this.xRot = x;
+    }
+
+    @Override
+    public void setYRot(float y) {
+        this.yRot = y;
+    }
+
+    @Override
+    public void setZRot(float z) {
+        this.roll = z;
+    }
+
+    @Override
+    public void setZRotD(float delta) {
+        this.rolld = delta;
+    }
+
+    @Override
+    public float getZRotD() {
+        return rolld;
+    }
+
+    @Override
+    public void setCollisionDrag(float drag) {
+        this.collisionDrag = drag;
+    }
+
+    @Override
+    public void setCoefficientOfRestitution(float coefficient) {
+        this.coefficientOfRestitution = coefficient;
+    }
+
+    @Override
+    public void setExpireOnContact(boolean b) {
+        this.expireOnContact = b;
+    }
+
+    @Override
+    public void setComponents(List<IParticleComponent> components) {
+        this.components = components;
+    }
+
+    @Override
+    public float getScaleU() {
+        return scaleU;
+    }
+
+    @Override
+    public float getScaleV() {
+        return scaleV;
+    }
+
+    @Override
+    public void setBillboardSize(float[] size) {
+        this.billboardSize = size;
+    }
+
+    @Override
+    public void setUvSize(float[] size) {
+        this.uvSize = size;
+    }
+
+    @Override
+    public float[] getUvSize() {
+        return uvSize;
+    }
+
+    @Override
+    public void setUvStep(float[] step) {
+        this.uvStep = step;
+    }
+
+    @Override
+    public float[] getUvStep() {
+        return uvStep;
+    }
+
+    @Override
+    public void setMaxFrame(int frame) {
+        this.maxFrame = frame;
+    }
+
+    @Override
+    public int getMaxFrame() {
+        return maxFrame;
+    }
+
+    @Override
+    public void setCurrentFrame(int frame) {
+        this.currentFrame = frame;
+    }
+
+    @Override
+    public int getCurrentFrame() {
+        return currentFrame;
+    }
+
+    @Override
+    public void setInsideKillPlane(boolean b) {
+        this.insideKillPlane = b;
+    }
+
+    @Override
+    public boolean isInsideKillPlane() {
+        return insideKillPlane;
+    }
+
+    @Override
+    public void setParticleGroup(ParticleLimit group) {
+        this.particleGroup = group;
+    }
+
+    @Override
+    public void setLastTimeline(int last) {
+        this.lastTimeline = last;
+    }
+
+    @Override
+    public int getLastTimeline() {
+        return lastTimeline;
+    }
+
+    @Override
+    public double getXd() {
+        return xd;
+    }
+
+    @Override
+    public double getYd() {
+        return yd;
+    }
+
+    @Override
+    public double getZd() {
+        return zd;
+    }
+
+    @Override
+    public double getX() {
+        return x;
+    }
+
+    @Override
+    public double getY() {
+        return y;
+    }
+
+    @Override
+    public double getZ() {
+        return z;
+    }
+
+    @Override
+    public void setPosO(double x, double y, double z) {
+        this.xo = x;
+        this.yo = y;
+        this.zo = z;
+    }
+
+    @Override
+    public void setColor(float red, float green, float blue, float alpha) {
+        super.setColor(red, green, blue);
+        super.setAlpha(alpha);
+    }
+
+    @Override
+    public void setUV(float u, float v, float w, float h) {
+        if (UV == null) this.UV = new float[4];
+        this.UV[0] = u / originX;
+        this.UV[1] = v / originY;
+        this.UV[2] = (u + w) / originX;
+        this.UV[3] = (v + h) / originY;
+    }
+
+    @Override
+    public void setCollision(boolean bool) {
+        this.hasCollision = bool;
+    }
+
+    @Override
+    public VariableTable getVars() {
+        return vars;
+    }
+
+    @Override
+    public Level getLevel() {
+        return level;
+    }
+
+    @Override
+    public double getRandom1() {
+        return particleRandom1;
+    }
+
+    @Override
+    public double getRandom2() {
+        return particleRandom2;
+    }
+
+    @Override
+    public double getRandom3() {
+        return particleRandom3;
+    }
+
+    @Override
+    public double getRandom4() {
+        return particleRandom4;
+    }
+
+    @Override
+    public ParticleEmitter getEmitter() {
+        return emitter;
+    }
+
+    @Override
+    protected float getU0() {
+        return UV == null ? super.getU0() : UV[0];
+    }
+
+    @Override
+    protected float getV0() {
+        return UV == null ? super.getV0() : UV[1];
+    }
+
+    @Override
+    protected float getU1() {
+        return UV == null ? super.getU1() : UV[2];
+    }
+
+    @Override
+    protected float getV1() {
+        return UV == null ? super.getV1() : UV[3];
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        this.xRotO = xRot;
+        this.yRotO = yRot;
+        this.oRoll = roll;
+        this.roll = roll + rolld;
+        for (IParticleComponent component : components) {
+            component.update(this);
+        }
+        PSDiagnostics.infoFirstN("particle-tick:" + (emitter == null ? "none" : emitter.id + ":" + emitter.particleId), 8, "particle tick runtimeId={} state={}",
+                emitter == null ? -1 : emitter.id,
+                diagnosticSummary()
+        );
+    }
+
+    @Override
+    public float getQuadSize(float partialTicks) {
+        if (billboardSize == null || billboardSize.length < 2) {
+            return super.getQuadSize(partialTicks);
+        }
+        float width = Math.abs(billboardSize[0]);
+        float height = Math.abs(billboardSize[1]);
+        float size = Math.max(width, height);
+        return size > 0.0F ? size : super.getQuadSize(partialTicks);
+    }
+
+    @Override
+    public void extract(@NotNull QuadParticleRenderState state, @NotNull Camera camera, float partialTicks) {
+        Quaternionf quaternionf = new Quaternionf();
+        getFacingCameraMode().setRotation(this, quaternionf, camera, partialTicks);
+        if (xRot != 0.0F) quaternionf.rotateX(Mth.lerp(partialTicks, xRotO, xRot));
+        if (yRot != 0.0F) quaternionf.rotateY(Mth.lerp(partialTicks, yRotO, yRot));
+        if (roll != 0.0F) quaternionf.rotateZ(Mth.lerp(partialTicks, oRoll, roll));
+        extractRotatedQuad(state, camera, quaternionf, partialTicks);
+    }
+
+    @Override
+    protected void extractRotatedQuad(QuadParticleRenderState state, Quaternionf orientation, float x, float y, float z, float partialTick) {
+        if (IS_SODIUM_LOADED) {
+            state.add(getLayer(), x, y, z, orientation.x, orientation.y, orientation.z, orientation.w, getQuadSize(partialTick), getU0(), getU1(), getV0(), getV1(), ARGB.colorFromFloat(this.alpha, this.rCol, this.gCol, this.bCol), getLightCoords(partialTick));
+        } else {
+            super.extractRotatedQuad(state, orientation, x, y, z, partialTick);
+        }
+    }
+
+    @Override
+    public void move(double x, double y, double z) {
+        if (stoppedByCollision) return;
+        double d0 = x;
+        double d1 = y;
+        double d2 = z;
+        if (hasPhysics && hasCollision && (x != 0.0 || y != 0.0 || z != 0.0) && x * x + y * y + z * z < MAXIMUM_COLLISION_VELOCITY_SQUARED) {
+            Vec3 vec3 = Entity.collideBoundingBox(null, new Vec3(x, y, z), getBoundingBox(), level, List.of());
+            if (x != vec3.x) {
+                this.xd = -Mth.sign(xd) * (Math.abs(xd) - collisionDrag) * coefficientOfRestitution;
+            }
+            if (y != vec3.y) {
+                this.yd *= -coefficientOfRestitution;
+            }
+            if (z != vec3.z) {
+                this.zd = -Mth.sign(zd) * (Math.abs(zd) - collisionDrag) * coefficientOfRestitution;
+            }
+            x = vec3.x;
+            y = vec3.y;
+            z = vec3.z;
+        }
+
+        if (x != 0.0 || y != 0.0 || z != 0.0) {
+            moveDirectly(x, y, z);
+        }
+
+        if (Math.abs(d1) >= Mth.EPSILON && Math.abs(y) < Mth.EPSILON) {
+            this.stoppedByCollision = true;
+        }
+
+        if (hasPhysics && hasCollision) {
+            this.onGround = d1 != y && d1 < 0.0;
+            boolean collided = d0 != x || d2 != z;
+
+            if (onGround || collided) {
+                if (!preset.collisionEvents.isEmpty()) {
+                    for (ParticleMotionCollision.Event event : preset.collisionEvents) {
+                        float tickSpeed = event.minSpeed() * getInvTickRate();
+                        if (tickSpeed * tickSpeed < xd * xd + yd * yd + zd * zd) {
+                            for (IEventNode node : preset.effect.events.get(event.event()).values()) {
+                                node.execute(this);
+                            }
+                        }
+                    }
+                }
+                if (expireOnContact) {
+                    remove();
+                }
+            }
+        }
+    }
+
+    @Override
+    public void remove() {
+        if (preset.lifeTimeEvents != null) {
+            preset.lifeTimeEvents.onExpiration(this);
+        }
+        super.remove();
+    }
+
+    @Override
+    public @NotNull ParticleRenderType getGroup() {
+        return preset.renderType == null ? ParticleRenderType.NO_RENDER : ParticleRenderType.SINGLE_QUADS;
+    }
+
+    @Override
+    protected @NotNull Layer getLayer() {
+        return preset.renderType == null ? Layer.OPAQUE : preset.renderType;
+    }
+
+    @Override
+    public @NotNull FaceCameraMode getFacingCameraMode() {
+        return preset.facingCameraMode;
+    }
+
+    @Override
+    protected int getLightCoords(float partialTick) {
+        return preset.environmentLighting ? super.getLightCoords(partialTick) : FULL_LIGHT;
+    }
+
+    @Override
+    public @NotNull Optional<ParticleLimit> getParticleLimit() {
+        return Optional.ofNullable(particleGroup);
+    }
+
+    @Override
+    public Identifier getIdentity() {
+        return preset.effect.description.identifier();
+    }
+
+    @Override
+    public Vec3 getPosition() {
+        return new Vec3(x, y, z);
+    }
+
+    public String diagnosticSummary() {
+        return "identity=" + getIdentity() +
+                ",pos=(" + x + "," + y + "," + z + ")" +
+                ",speed=(" + xd + "," + yd + "," + zd + ")" +
+                ",age=" + age +
+                ",lifetime=" + getLifetime() +
+                ",quadSize=" + getQuadSize(0.0F) +
+                ",billboardSize=" + Arrays.toString(billboardSize) +
+                ",color=(" + rCol + "," + gCol + "," + bCol + "," + alpha + ")" +
+                ",spriteSize=" + sprite.contents().width() + "x" + sprite.contents().height() +
+                ",atlasSize=" + originX + "x" + originY +
+                ",scale=(" + scaleU + "," + scaleV + ")" +
+                ",uv=" + Arrays.toString(UV) +
+                ",uvSize=" + Arrays.toString(uvSize) +
+                ",uvStep=" + Arrays.toString(uvStep) +
+                ",frame=" + currentFrame + "/" + maxFrame +
+                ",layer=" + getLayer() +
+                ",group=" + getGroup() +
+                ",motionDynamic=" + preset.motionDynamic +
+                ",components=" + components.stream().map(component -> component.getClass().getSimpleName()).toList() +
+                ",flags=" + diagnosticFlags();
+    }
+
+    private String diagnosticFlags() {
+        StringBuilder builder = new StringBuilder();
+        appendDiagnosticFlag(builder, getLifetime() <= 0, "lifetime<=0");
+        appendDiagnosticFlag(builder, billboardSize == null || billboardSize.length < 2 || billboardSize[0] <= 0.0F || billboardSize[1] <= 0.0F, "size<=0");
+        appendDiagnosticFlag(builder, alpha <= 0.0F, "alpha<=0");
+        appendDiagnosticFlag(builder, preset.renderType == null, "no_render_type");
+        appendDiagnosticFlag(builder, sprite.contents().width() <= 0 || sprite.contents().height() <= 0, "sprite_empty");
+        return builder.isEmpty() ? "none" : builder.toString();
+    }
+
+    private static void appendDiagnosticFlag(StringBuilder builder, boolean condition, String name) {
+        if (!condition) {
+            return;
+        }
+        if (!builder.isEmpty()) {
+            builder.append('|');
+        }
+        builder.append(name);
+    }
+
+    public static class Provider implements ParticleProvider<MolangParticleOption> {
+        @Override
+        public @Nullable Particle createParticle(@NotNull MolangParticleOption option, @NotNull ClientLevel level, double x, double y, double z, double xSpeed, double ySpeed, double zSpeed, RandomSource random) {
+            return new MolangParticleInstance(option.getPreset(), level, x, y, z, random);
+        }
+    }
+}
