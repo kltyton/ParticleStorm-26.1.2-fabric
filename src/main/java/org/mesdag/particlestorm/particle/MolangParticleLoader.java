@@ -28,6 +28,7 @@ import org.mesdag.particlestorm.ParticleStorm;
 import org.mesdag.particlestorm.api.IParticleComponent;
 import org.mesdag.particlestorm.api.IntAllocator;
 import org.mesdag.particlestorm.api.RegisterCustomEmitterTypeEvent;
+import org.mesdag.particlestorm.api.RegisterCustomParticleTypeEvent;
 import org.mesdag.particlestorm.data.DefinedParticleEffect;
 import org.mesdag.particlestorm.network.EmitterRemovalPacket;
 import org.mesdag.particlestorm.network.EmitterSynchronizePacket;
@@ -251,6 +252,7 @@ public class MolangParticleLoader implements PreparableReloadListener {
             this.id2Effect = id2Effect;
             this.id2Particle = id2Particle;
             this.id2Emitter = id2Emitter;
+            RegisterCustomParticleTypeEvent.bindSprites(id2Effect);
             this.initialized = false;
             ParticleStorm.LOGGER.info("Loaded {} particle definitions with {} usable ids", effects.size(), id2Emitter.size());
         }, gameExecutor);

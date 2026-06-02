@@ -4,6 +4,7 @@ import com.google.common.collect.Iterables;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.Nullable;
+import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.api.IParticleComponent;
 import org.mesdag.particlestorm.api.MolangInstance;
 import org.mesdag.particlestorm.data.DefinedParticleEffect;
@@ -45,7 +46,7 @@ public class ParticlePreset {
         this.renderType = switch (effect.description.parameters().material()) {
             case TERRAIN_SHEET -> SingleQuadParticle.Layer.OPAQUE_TERRAIN;
             case particles_opaque, PARTICLE_SHEET_OPAQUE -> SingleQuadParticle.Layer.OPAQUE;
-            case particles_add -> SingleQuadParticle.Layer.OPAQUE;
+            case particles_add -> PSGameClient.PARTICLE_ADD;
             case particles_blend, PARTICLE_SHEET_TRANSLUCENT -> SingleQuadParticle.Layer.TRANSLUCENT;
             case particles_alpha, PARTICLE_SHEET_LIT -> SingleQuadParticle.Layer.TRANSLUCENT;
             case CUSTOM -> SingleQuadParticle.Layer.OPAQUE;

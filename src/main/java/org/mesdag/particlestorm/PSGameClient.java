@@ -1,13 +1,27 @@
 package org.mesdag.particlestorm;
 
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.ColorTargetState;
+import com.mojang.blaze3d.pipeline.DepthStencilState;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.CompareOp;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleProviderRegistry;
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.debug.DebugScreenEntries;
+import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.server.packs.PackType;
+import net.minecraft.gizmos.GizmoStyle;
+import net.minecraft.gizmos.Gizmos;
+import net.minecraft.gizmos.TextGizmo;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.mesdag.particlestorm.api.IComponent;
 import org.mesdag.particlestorm.api.IEventNode;
 import org.mesdag.particlestorm.api.RegisterCustomParticleTypeEvent;
@@ -19,9 +33,20 @@ import org.mesdag.particlestorm.network.EmitterRemovalPacket;
 import org.mesdag.particlestorm.network.EmitterSynchronizePacket;
 import org.mesdag.particlestorm.particle.MolangParticleInstance;
 import org.mesdag.particlestorm.particle.MolangParticleLoader;
+import org.mesdag.particlestorm.particle.ParticleEmitter;
 
 public final class PSGameClient implements ClientModInitializer {
     public static final MolangParticleLoader LOADER = new MolangParticleLoader();
+    public static final SingleQuadParticle.Layer PARTICLE_ADD = new SingleQuadParticle.Layer(
+            true,
+            TextureAtlas.LOCATION_PARTICLES,
+            RenderPipelines.register(RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET)
+                    .withLocation(ParticleStorm.asResource("pipeline/additive_particle"))
+                    .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
+                    .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                    .build()
+            )
+    );
 
     @Override
     public void onInitializeClient() {
@@ -47,6 +72,34 @@ public final class PSGameClient implements ClientModInitializer {
             LOADER.removeAll();
         } else if (!minecraft.isPaused() && localPlayer.level().tickRateManager().runsNormally()) {
             LOADER.tick(localPlayer);
+            collectEmitterGizmos();
+        }
+    }
+
+    private static void collectEmitterGizmos() {
+        if (!PSClientConfigs.showEmitterOutline) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!minecraft.debugEntries.isCurrentlyEnabled(DebugScreenEntries.ENTITY_HITBOXES)) {
+            return;
+        }
+
+        try {
+            for (ParticleEmitter emitter : LOADER.getEmitters()) {
+                Vec3 pos = emitter.pos;
+                int particleCount = emitter.particleGroup == null ? 0 : minecraft.particleEngine.trackedParticleCounts.getInt(emitter.particleGroup);
+                int limit = emitter.particleGroup == null ? 0 : emitter.particleGroup.limit();
+                int countColor = limit > 0 && particleCount >= limit ? 0xFFFF0000 : 0xFFFFFFFF;
+
+                Gizmos.cuboid(new AABB(pos.subtract(0.5, 0.5, 0.5), pos.add(0.5, 0.5, 0.5)), GizmoStyle.stroke(0xFF00FF00, 2.5F)).persistForMillis(50);
+                Gizmos.billboardText(emitter.particleId == null ? "unknown" : emitter.particleId.toString(), pos.add(0.0, 0.5, 0.0), TextGizmo.Style.forColorAndCentered(0xFFFFFFFF).withScale(0.22F)).setAlwaysOnTop().persistForMillis(50);
+                Gizmos.billboardText("id: " + emitter.id, pos.add(0.0, 0.3, 0.0), TextGizmo.Style.forColorAndCentered(0xFFFFFFFF).withScale(0.2F)).setAlwaysOnTop().persistForMillis(50);
+                Gizmos.billboardText("particles: " + particleCount, pos.add(0.0, 0.1, 0.0), TextGizmo.Style.forColorAndCentered(countColor).withScale(0.2F)).setAlwaysOnTop().persistForMillis(50);
+            }
+        } catch (IllegalStateException exception) {
+            PSDiagnostics.warnOnce("emitter-gizmo-context", "emitter outline skipped because no Gizmo collector is active");
         }
     }
 

@@ -6,7 +6,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class PSDiagnostics {
-    public static final boolean ENABLED = Boolean.parseBoolean(System.getProperty("particlestorm.diagnostics", "true"));
     private static final String PREFIX = "[ParticleStorm diag] ";
     private static final Set<String> ONCE = ConcurrentHashMap.newKeySet();
     private static final Map<String, AtomicInteger> COUNTERS = new ConcurrentHashMap<>();
@@ -20,31 +19,31 @@ public final class PSDiagnostics {
     }
 
     public static void info(String format, Object... args) {
-        if (ENABLED) {
+        if (enabled()) {
             ParticleStorm.LOGGER.info(PREFIX + format, args);
         }
     }
 
     public static void warn(String format, Object... args) {
-        if (ENABLED) {
+        if (enabled()) {
             ParticleStorm.LOGGER.warn(PREFIX + format, args);
         }
     }
 
     public static void error(String format, Object... args) {
-        if (ENABLED) {
+        if (enabled()) {
             ParticleStorm.LOGGER.error(PREFIX + format, args);
         }
     }
 
     public static void infoOnce(String key, String format, Object... args) {
-        if (ENABLED && ONCE.add("info:" + key)) {
+        if (enabled() && ONCE.add("info:" + key)) {
             info(format, args);
         }
     }
 
     public static void warnOnce(String key, String format, Object... args) {
-        if (ENABLED && ONCE.add("warn:" + key)) {
+        if (enabled() && ONCE.add("warn:" + key)) {
             warn(format, args);
         }
     }
@@ -62,6 +61,10 @@ public final class PSDiagnostics {
     }
 
     private static boolean shouldLog(String key, int limit) {
-        return ENABLED && COUNTERS.computeIfAbsent(key, ignored -> new AtomicInteger()).getAndIncrement() < limit;
+        return enabled() && COUNTERS.computeIfAbsent(key, ignored -> new AtomicInteger()).getAndIncrement() < limit;
+    }
+
+    private static boolean enabled() {
+        return PSClientConfigs.debug;
     }
 }

@@ -30,14 +30,14 @@ public record EmitterRemovalPacket(int id) implements CustomPacketPayload {
         Player player = context.player();
         ParticleEmitter emitter = PSGameClient.LOADER.removeEmitter(payload.id, false);
         if (emitter == null) {
-            player.sendSystemMessage(Component.translatable("particle.notFound", payload.id));
+            player.sendSystemMessage(Component.translatable("commands.particlestorm.not_found", payload.id));
         } else {
             player.sendSystemMessage(Component.translatable("commands.particlestorm.remove", emitter.particleId == null ? payload.id : emitter.particleId.toString()));
         }
     }
 
     public static void handleServer(EmitterRemovalPacket payload, ServerPlayNetworking.Context context) {
-        ParticleStorm.LOGGER.debug("Received client emitter removal request for id {}", payload.id);
+        EmitterSynchronizePacket.getEmitterData(context.player(), false).remove(Integer.toString(payload.id));
     }
 
     public static void sendToServer(int id) {
@@ -47,6 +47,7 @@ public record EmitterRemovalPacket(int id) implements CustomPacketPayload {
     }
 
     public static void sendToClient(ServerPlayer player, int id) {
+        EmitterSynchronizePacket.getEmitterData(player, false).remove(Integer.toString(id));
         ServerPlayNetworking.send(player, new EmitterRemovalPacket(id));
     }
 }
