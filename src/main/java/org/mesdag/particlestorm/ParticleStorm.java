@@ -7,6 +7,7 @@ import io.netty.buffer.ByteBuf;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.Registry;
 import net.minecraft.core.particles.ParticleType;
@@ -49,9 +50,11 @@ public final class ParticleStorm implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        PSClientConfigs.onLoad();
         Registry.register(BuiltInRegistries.PARTICLE_TYPE, asResource("molang"), MOLANG);
         registerPayloads();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> MolangParticleCommand.register(dispatcher));
+        ServerPlayConnectionEvents.JOIN.register((listener, sender, server) -> EmitterSynchronizePacket.syncSavedEmitters(listener.getPlayer()));
     }
 
     private static void registerPayloads() {

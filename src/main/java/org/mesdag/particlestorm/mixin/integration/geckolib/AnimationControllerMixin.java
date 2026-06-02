@@ -3,12 +3,13 @@ package org.mesdag.particlestorm.mixin.integration.geckolib;
 import com.geckolib.animatable.GeoAnimatable;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
+import com.geckolib.animation.state.ControllerState;
 import com.geckolib.cache.animation.keyframeevent.ParticleKeyframeData;
+import com.geckolib.loading.math.MolangQueries;
 import com.geckolib.model.GeoModel;
 import com.geckolib.renderer.base.GeoRenderState;
 import org.jetbrains.annotations.Nullable;
 import org.mesdag.particlestorm.api.geckolib.GeckoLibHelper;
-import org.mesdag.particlestorm.PSDiagnostics;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -31,8 +32,8 @@ public abstract class AnimationControllerMixin<T extends GeoAnimatable> {
     @Unique
     private AnimationController.KeyframeEventHandler<T, ParticleKeyframeData> particlestorm$wrappedParticleHandler;
 
-    @Inject(method = "checkControllerState", at = @At("HEAD"))
-    private void particlestorm$ensureParticleHandler(T animatable, GeoRenderState renderState, AnimatableManager<T> manager, GeoModel<T> geoModel, CallbackInfoReturnable<Boolean> cir) {
+    @Inject(method = "extractControllerState", at = @At("HEAD"))
+    private void particlestorm$ensureParticleHandler(T animatable, GeoRenderState renderState, AnimatableManager<T> manager, MolangQueries.Actor<T> actor, GeoModel<T> geoModel, CallbackInfoReturnable<ControllerState> cir) {
         particlestorm$wrapParticleHandler();
     }
 
@@ -57,8 +58,8 @@ public abstract class AnimationControllerMixin<T extends GeoAnimatable> {
             if (original != null) {
                 original.handle(event);
             }
+            GeckoLibHelper.processParticleEffect(event);
         };
         particleKeyframeHandler = particlestorm$wrappedParticleHandler;
-        PSDiagnostics.infoOnce("geckolib-animation-controller:" + name, "GeckoLib AnimationController particle handler hooked controller={}", name);
     }
 }

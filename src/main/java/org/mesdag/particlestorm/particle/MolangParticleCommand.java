@@ -33,9 +33,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public class MolangParticleCommand {
-    private static final SimpleCommandExceptionType ERROR_FAILED = new SimpleCommandExceptionType(Component.translatable("commands.particle.failed"));
+    private static final SimpleCommandExceptionType ERROR_FAILED = new SimpleCommandExceptionType(Component.translatable("commands.particlestorm.failed"));
     private static final DynamicCommandExceptionType ERROR_UNKNOWN_PARTICLE = new DynamicCommandExceptionType(
-            id -> Component.literal("Unknown ParticleStorm particle: " + id)
+            id -> Component.translatable("commands.particlestorm.unknown_particle", id)
     );
     private static final List<String> POSITION_SUGGESTIONS = List.of("~ ~ ~", "~ ~1 ~", "~ ~-1 ~", "^ ^ ^", "^ ^ ^1");
     private static final List<String> EXPRESSION_SUGGESTIONS = List.of("\"\"", "\"v.size=1;\"", "\"v.alpha=1;\"", "\"v.size=1;v.alpha=1;\"");
@@ -183,7 +183,7 @@ public class MolangParticleCommand {
         if (i == 0) {
             throw ERROR_FAILED.create();
         } else {
-            source.sendSuccess(() -> Component.translatable("commands.particle.success", resolved.toString()), true);
+            source.sendSuccess(() -> Component.translatable("commands.particlestorm.add", resolved.toString()), true);
             return i;
         }
     }

@@ -7,9 +7,14 @@
     "BlockEntityMixin",
     "EntityMixin",
     "LivingEntityMixin",
+    "PlayerMixin",
     "TextureAtlasSpriteMixin"
   ],
   "client": [
+    "integration.geckolib.AnimationControllerMixin",
+    "integration.geckolib.GeoReplacedEntityRendererMixin",
+    "integration.geckolib.MolangQueriesMixin",
+    "integration.geckolib.RenderPassInfoMixin"
   ],
   "injectors": {
     "defaultRequire": 1
