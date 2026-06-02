@@ -21,6 +21,7 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.mesdag.particlestorm.PSDiagnostics;
+import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.api.IEventNode;
 import org.mesdag.particlestorm.api.IMolangParticleInstance;
 import org.mesdag.particlestorm.api.IParticleComponent;
@@ -421,7 +422,7 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
             if (size <= MIN_RENDER_SIZE) {
                 size = super.getQuadSize(partialTick);
             }
-            state.add(getLayer(), x, y, z, orientation.x, orientation.y, orientation.z, orientation.w, size, getU0(), getU1(), getV0(), getV1(), color, light);
+            addBillboardFace(state, orientation, x, y, z, size, getU0(), getU1(), getV0(), getV1(), color, light);
             return;
         }
 
@@ -459,7 +460,16 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
             float segmentV0 = splitWidth ? v0 : Mth.lerp(segmentStart, v0, v1);
             float segmentV1 = splitWidth ? v1 : Mth.lerp(segmentEnd, v0, v1);
 
-            state.add(getLayer(), x + axis.x * offset, y + axis.y * offset, z + axis.z * offset, orientation.x, orientation.y, orientation.z, orientation.w, minor, segmentU0, segmentU1, segmentV0, segmentV1, color, light);
+            addBillboardFace(state, orientation, x + axis.x * offset, y + axis.y * offset, z + axis.z * offset, minor, segmentU0, segmentU1, segmentV0, segmentV1, color, light);
+        }
+    }
+
+    private void addBillboardFace(QuadParticleRenderState state, Quaternionf orientation, float x, float y, float z, float size, float u0, float u1, float v0, float v1, int color, int light) {
+        SingleQuadParticle.Layer layer = getLayer();
+        state.add(layer, x, y, z, orientation.x, orientation.y, orientation.z, orientation.w, size, u0, u1, v0, v1, color, light);
+        if (layer == PSGameClient.PARTICLE_ADD) {
+            Quaternionf back = new Quaternionf(orientation).rotateY(Mth.PI);
+            state.add(layer, x, y, z, back.x, back.y, back.z, back.w, size, u1, u0, v0, v1, color, light);
         }
     }
 

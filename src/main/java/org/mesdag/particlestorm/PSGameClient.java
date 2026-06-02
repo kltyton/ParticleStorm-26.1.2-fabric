@@ -43,7 +43,7 @@ public final class PSGameClient implements ClientModInitializer {
             RenderPipelines.register(RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET)
                     .withLocation(ParticleStorm.asResource("pipeline/additive_particle"))
                     .withColorTargetState(new ColorTargetState(BlendFunction.LIGHTNING))
-                    .withCull(false)
+                    .withCull(true)
                     .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
                     .build()
             )
