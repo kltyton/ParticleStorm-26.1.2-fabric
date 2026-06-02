@@ -1,19 +1,15 @@
 package org.mesdag.particlestorm.particle;
 
 import com.google.common.collect.Iterables;
-import net.minecraft.client.particle.ParticleRenderType;
+import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.util.Mth;
-import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.Nullable;
-import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.api.IParticleComponent;
 import org.mesdag.particlestorm.api.MolangInstance;
-import org.mesdag.particlestorm.api.ParticlePresetLoadedEvent;
 import org.mesdag.particlestorm.data.DefinedParticleEffect;
 import org.mesdag.particlestorm.data.MathHelper;
 import org.mesdag.particlestorm.data.component.*;
 import org.mesdag.particlestorm.data.curve.ParticleCurve;
-import org.mesdag.particlestorm.data.description.DescriptionMaterial;
 import org.mesdag.particlestorm.data.molang.FloatMolangExp;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 import org.mesdag.particlestorm.data.molang.VariableTable;
@@ -28,7 +24,7 @@ import static org.mesdag.particlestorm.data.molang.compiler.MolangQueries.applyP
 
 public class ParticlePreset {
     public DefinedParticleEffect effect;
-    public ParticleRenderType renderType;
+    public SingleQuadParticle.Layer renderType;
     public FaceCameraMode facingCameraMode;
     public float minSpeedThresholdSqr;
     public boolean environmentLighting;
@@ -37,7 +33,6 @@ public class ParticlePreset {
     public float invTextureWidth;
     public float invTextureHeight;
     public boolean motionDynamic;
-    public @Nullable FloatMolangExp perUpdateExpression;
 
     public VariableTable vars;
     public List<VariableAssignment> assignments;
@@ -47,24 +42,15 @@ public class ParticlePreset {
 
     public ParticlePreset(DefinedParticleEffect effect) {
         this.effect = effect;
-        DescriptionMaterial material = effect.description.parameters().material();
-        if (material == DescriptionMaterial.TERRAIN_SHEET) {
-            this.renderType = ParticleRenderType.TERRAIN_SHEET;
-        } else if (material == DescriptionMaterial.particles_opaque || material == DescriptionMaterial.PARTICLE_SHEET_OPAQUE) {
-            this.renderType = ParticleRenderType.PARTICLE_SHEET_OPAQUE;
-        } else if (material == DescriptionMaterial.particles_add) {
-            this.renderType = PSGameClient.PARTICLE_ADD;
-        } else if (material == DescriptionMaterial.particles_blend) {
-            this.renderType = PSGameClient.PARTICLE_BLEND;
-        } else if (material == DescriptionMaterial.PARTICLE_SHEET_TRANSLUCENT) {
-            this.renderType = ParticleRenderType.PARTICLE_SHEET_TRANSLUCENT;
-        } else if (material == DescriptionMaterial.particles_alpha || material == DescriptionMaterial.PARTICLE_SHEET_LIT) {
-            this.renderType = ParticleRenderType.PARTICLE_SHEET_LIT;
-        } else if (material == DescriptionMaterial.CUSTOM) {
-            this.renderType = ParticleRenderType.CUSTOM;
-        } else {
-            this.renderType = ParticleRenderType.NO_RENDER;
-        }
+        this.renderType = switch (effect.description.parameters().material()) {
+            case TERRAIN_SHEET -> SingleQuadParticle.Layer.OPAQUE_TERRAIN;
+            case particles_opaque, PARTICLE_SHEET_OPAQUE -> SingleQuadParticle.Layer.OPAQUE;
+            case particles_add -> SingleQuadParticle.Layer.OPAQUE;
+            case particles_blend, PARTICLE_SHEET_TRANSLUCENT -> SingleQuadParticle.Layer.TRANSLUCENT;
+            case particles_alpha, PARTICLE_SHEET_LIT -> SingleQuadParticle.Layer.TRANSLUCENT;
+            case CUSTOM -> SingleQuadParticle.Layer.OPAQUE;
+            default -> null;
+        };
         if (effect.components.get(ParticleAppearanceBillboard.ID) instanceof ParticleAppearanceBillboard component) {
             this.facingCameraMode = FaceCameraMode.fromComponent(component.faceCameraMode());
             this.minSpeedThresholdSqr = Mth.square(component.direction().minSpeedThreshold());
@@ -81,8 +67,6 @@ public class ParticlePreset {
         ParticleMotionCollision motionCollision = (ParticleMotionCollision) effect.components.get(ParticleMotionCollision.ID);
         if (motionCollision != null) this.collisionEvents = motionCollision.events();
         this.motionDynamic = effect.components.get(ParticleMotionDynamic.ID) != null;
-        ParticleInitialization initialization = (ParticleInitialization) effect.components.get(ParticleInitialization.ID);
-        if (initialization != null) this.perUpdateExpression = initialization.perUpdateExpression();
 
         VariableTable table = new VariableTable(addDefaultVariables(), null);
         MolangParser parser = new MolangParser(table);
@@ -112,7 +96,6 @@ public class ParticlePreset {
         }
         this.vars = table;
         this.assignments = toInit;
-        NeoForge.EVENT_BUS.post(new ParticlePresetLoadedEvent(effect, this));
     }
 
     public <T> void setTicket(Class<T> clazz, T value) {

@@ -1,18 +1,20 @@
 package org.mesdag.particlestorm.particle;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleLimit;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.mesdag.particlestorm.PSGameClient;
+import org.mesdag.particlestorm.PSDiagnostics;
 import org.mesdag.particlestorm.api.IEmitterComponent;
 import org.mesdag.particlestorm.api.MolangInstance;
 import org.mesdag.particlestorm.data.MathHelper;
@@ -31,64 +33,66 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ParticleEmitter implements MolangInstance {
-    public ResourceLocation particleId;
+    public Identifier particleId;
     public MolangExp expression;
 
-    public transient Matrix4f parentSpace;
-
+    public transient ParentMode parentMode = ParentMode.WORLD;
+    public transient Vec3 offsetPos = Vec3.ZERO;
+    public transient Vector3f offsetRot = new Vector3f();
+    public transient Vector3f parentPosition;
+    public transient Vector3f parentRotation;
     protected transient EmitterPreset preset;
     protected transient VariableTable vars;
     protected transient List<IEmitterComponent> components;
     public transient ParticleEmitter parent;
     public transient @Nullable Runnable afterParentInit;
-    protected transient @Nullable List<ParticleEmitter> children;
+    public transient final List<ParticleEmitter> children = new ArrayList<>();
     public transient Vector3f inheritedParticleSpeed;
     public transient boolean isManual;
 
-    protected float emitterRandom1;
-    protected float emitterRandom2;
-    protected float emitterRandom3;
-    protected float emitterRandom4;
+    protected double emitterRandom1;
+    protected double emitterRandom2;
+    protected double emitterRandom3;
+    protected double emitterRandom4;
     public int id;
 
     public transient float invTickRate;
-    public transient int age;
-    public transient int lifetime;
+    public transient int age = 0;
+    public transient int lifetime = 0;
     public transient boolean active = true;
-    public transient int loopingTime;
-    public transient int activeTime;
-    public transient int fullLoopTime;
-    public transient MutableParticleGroup particleGroup;
+    public transient int loopingTime = 0;
+    public transient int activeTime = 0;
+    public transient int fullLoopTime = 0;
+    public transient ParticleLimit particleGroup;
     public transient int spawnDuration = 1;
-    public transient int spawnRate;
-    public transient boolean spawned;
+    public transient int spawnRate = 0;
+    public transient boolean spawned = false;
     protected transient Entity attached;
     public transient BlockEntity attachedBlock;
-    public transient int lastTimeline;
-    public transient float moveDist;
-    public transient float moveDistO;
-    public transient int lastTravelDist;
+    public transient int lastTimeline = 0;
+    public transient float moveDist = 0.0F;
+    public transient float moveDistO = 0.0F;
+    public transient int lastTravelDist = 0;
     public transient float[] cachedLooping;
 
     public transient final Level level;
-    protected Vec3 pos;
+    public Vec3 pos;
     public Vec3 posO = Vec3.ZERO;
-    protected final Vector3f rotated = new Vector3f();
-    public boolean hideOutline;
+    public Vector3f rot = new Vector3f();
     private transient boolean removed = false;
 
-    public ParticleEmitter(Level level, Vec3 pos, ResourceLocation particleId, MolangExp expression) {
+    public ParticleEmitter(Level level, Vec3 pos, Identifier particleId, MolangExp expression) {
         this.level = level;
         setPos(pos);
         this.posO = pos;
         this.particleId = particleId;
         this.expression = expression;
-        updateRandoms(level.random);
+        updateRandoms(level.getRandom());
         this.invTickRate = 1.0F / level.tickRateManager().tickrate();
         init();
     }
 
-    public ParticleEmitter(Level level, Vec3 pos, ResourceLocation particleId) {
+    public ParticleEmitter(Level level, Vec3 pos, Identifier particleId) {
         this(level, pos, particleId, MolangExp.EMPTY);
     }
 
@@ -105,7 +109,7 @@ public class ParticleEmitter implements MolangInstance {
         this.posO = pos;
         this.particleId = effect.effect();
         this.expression = effect.preEffectExpression();
-        updateRandoms(level.random);
+        updateRandoms(level.getRandom());
         this.invTickRate = 1.0F / level.tickRateManager().tickrate();
         this.afterParentInit = () -> {
             switch (effect.type()) {
@@ -113,7 +117,11 @@ public class ParticleEmitter implements MolangInstance {
                 case EMITTER_BOUND -> {
                     attachEntity(parent.getAttachedEntity());
                     this.attachedBlock = parent.attachedBlock;
-                    this.parentSpace = parent.parentSpace;
+                    this.offsetPos = parent.offsetPos;
+                    this.offsetRot = parent.offsetRot;
+                    this.parentPosition = parent.parentPosition;
+                    this.parentRotation = parent.parentRotation;
+                    this.parentMode = parent.parentMode;
                 }
                 case PARTICLE -> this.isManual = true;
                 case PARTICLE_WITH_VELOCITY -> {
@@ -154,11 +162,23 @@ public class ParticleEmitter implements MolangInstance {
     }
 
     protected void createVars() {
-        this.preset = MolangParticleEngine.INSTANCE.id2Emitter().get(particleId);
+        Identifier requestedId = particleId;
+        Identifier resolvedId = PSGameClient.LOADER.resolveParticleId(particleId);
+        if (resolvedId != null) {
+            this.particleId = resolvedId;
+        }
+        this.preset = PSGameClient.LOADER.id2Emitter().get(particleId);
         if (preset == null) {
             throw new IllegalArgumentException("Unknown particle id: '" + particleId + "'!");
         }
         this.vars = new VariableTable(preset.vars);
+        PSDiagnostics.infoFirstN("emitter-vars:" + particleId, 32, "emitter vars requested={} resolved={} expression={} presetComponents={} eventKeys={}",
+                requestedId,
+                particleId,
+                expression == null ? "" : expression.getExpStr(),
+                preset.components.stream().map(component -> component.getClass().getSimpleName()).toList(),
+                preset.events.keySet()
+        );
     }
 
     protected void initVars() {
@@ -179,13 +199,27 @@ public class ParticleEmitter implements MolangInstance {
             e.apply(this);
             return e.requireUpdate();
         }).toList();
+        PSDiagnostics.infoFirstN("emitter-components:" + particleId, 32, "emitter ready runtimeId={} particle={} active={} lifetime={} rateType={} spawnRate={} spawnDuration={} particleGroup={} localPosition={} localRotation={} localVelocity={} updateComponents={}",
+                id,
+                particleId,
+                active,
+                lifetime,
+                preset.emitterRateType,
+                spawnRate,
+                spawnDuration,
+                particleGroup,
+                preset.localPosition,
+                preset.localRotation,
+                preset.localVelocity,
+                components.stream().map(component -> component.getClass().getSimpleName()).toList()
+        );
     }
 
     public synchronized void updateRandoms(RandomSource random) {
-        this.emitterRandom1 = random.nextFloat();
-        this.emitterRandom2 = random.nextFloat();
-        this.emitterRandom3 = random.nextFloat();
-        this.emitterRandom4 = random.nextFloat();
+        this.emitterRandom1 = random.nextDouble();
+        this.emitterRandom2 = random.nextDouble();
+        this.emitterRandom3 = random.nextDouble();
+        this.emitterRandom4 = random.nextDouble();
     }
 
     public void tick() {
@@ -208,10 +242,12 @@ public class ParticleEmitter implements MolangInstance {
                 remove();
                 return;
             }
-            if (isLocalSpace()) {
-                rotated.set(parentSpace.m30(), parentSpace.m31(), parentSpace.m32());
-            } else {
-                rotated.set(0);
+            if (parentRotation != null) {
+                rot.set(parentRotation).add(offsetRot.x, offsetRot.y + getAttachedYRot() * Mth.DEG_TO_RAD, offsetRot.z);
+            }
+            Vector3f rotated = offsetPos.toVector3f().rotateZ(rot.z).rotateY(rot.y).rotateX(rot.x);
+            if (parentPosition != null) {
+                rotated.add(parentPosition);
             }
             this.pos = new Vec3(attached.getX() + rotated.x, attached.getY() + rotated.y, attached.getZ() + rotated.z);
         } else if (attachedBlock != null) {
@@ -219,13 +255,15 @@ public class ParticleEmitter implements MolangInstance {
                 remove();
                 return;
             }
-            if (isLocalSpace()) {
-                rotated.set(parentSpace.m30(), parentSpace.m31(), parentSpace.m32());
-            } else {
-                rotated.set(0);
+            if (parentRotation != null) {
+                rot.set(parentRotation).add(offsetRot);
             }
-            BlockPos bp = attachedBlock.getBlockPos();
-            this.pos = new Vec3(bp.getX() + 0.5 + rotated.x, bp.getY() + rotated.y, bp.getZ() + 0.5 + rotated.z);
+            Vector3f rotated = offsetPos.toVector3f().rotateZ(rot.z).rotateY(rot.y).rotateX(rot.x);
+            if (parentPosition != null) {
+                rotated.add(parentPosition);
+            }
+            BlockPos pos1 = attachedBlock.getBlockPos();
+            this.pos = new Vec3(pos1.getX() + 0.5 + rotated.x, pos1.getY() + rotated.y, pos1.getZ() + 0.5 + rotated.z);
         }
 
         if (afterParentInit != null && parent != null) {
@@ -240,54 +278,27 @@ public class ParticleEmitter implements MolangInstance {
         }
     }
 
-    public void local2World(Vector3f vec, float partialTick) {
-        if (isLocalSpace()) {
-            if (preset.localRotation) {
-                if (parentSpace != null) {
-                    vec.mulDirection(parentSpace);
-                }
-            }
-            if (preset.localPosition) {
-                vec.add(
-                        (float) Mth.lerp(partialTick, posO.x, pos.x),
-                        (float) Mth.lerp(partialTick, posO.y, pos.y),
-                        (float) Mth.lerp(partialTick, posO.z, pos.z)
-                );
-            }
-        }
-    }
-
-    public boolean isLocalSpace() {
-        return parentSpace != null;
+    private float getAttachedYRot() {
+        return attached instanceof LivingEntity living ? -living.yBodyRot : attached.getYRot();
     }
 
     public void remove() {
         this.removed = true;
     }
 
-    @Contract(value = "true -> !null", pure = true)
-    public @Nullable List<ParticleEmitter> getChildren(boolean create) {
-        if (create && children == null) {
-            this.children = new ArrayList<>();
-        }
-        return children;
-    }
-
     public void onRemove() {
-        if (children != null) {
-            children.removeIf(child -> {
-                child.parent = null;
-                child.remove();
-                return true;
-            });
-        }
+        children.removeIf(child -> {
+            child.parent = null;
+            child.remove();
+            return true;
+        });
         if (preset != null && preset.lifetimeEvents != null) {
             preset.lifetimeEvents.onExpiration(this);
         }
     }
 
     public void addParent(ParticleEmitter parent) {
-        parent.getChildren(true).add(this);
+        parent.children.add(this);
         this.parent = parent;
     }
 
@@ -303,28 +314,38 @@ public class ParticleEmitter implements MolangInstance {
         return preset;
     }
 
-    public void deserialize(CompoundTag tag) {
-        this.particleId = ResourceLocation.parse(tag.getString("particleId"));
-        this.expression = new MolangExp(tag.getString("expression"));
-        this.emitterRandom1 = tag.getFloat("emitterRandom1");
-        this.emitterRandom2 = tag.getFloat("emitterRandom2");
-        this.emitterRandom3 = tag.getFloat("emitterRandom3");
-        this.emitterRandom4 = tag.getFloat("emitterRandom4");
-        this.posO = this.pos = new Vec3(tag.getDouble("posX"), tag.getDouble("posY"), tag.getDouble("posZ"));
-        this.hideOutline = tag.getBoolean("hideOutline");
+    public void deserialize(CompoundTag compound) {
+        this.particleId = Identifier.parse(compound.getString("particleId").orElse(""));
+        this.expression = new MolangExp(compound.getString("expression").orElse(""));
+        this.emitterRandom1 = compound.getDouble("emitterRandom1").orElse(0.0);
+        this.emitterRandom2 = compound.getDouble("emitterRandom2").orElse(0.0);
+        this.emitterRandom3 = compound.getDouble("emitterRandom3").orElse(0.0);
+        this.emitterRandom4 = compound.getDouble("emitterRandom4").orElse(0.0);
+        this.posO = this.pos = new Vec3(
+                compound.getDouble("posX").orElse(0.0),
+                compound.getDouble("posY").orElse(0.0),
+                compound.getDouble("posZ").orElse(0.0)
+        );
+        this.rot.set(
+                compound.getFloat("rotX").orElse(0.0F),
+                compound.getFloat("rotY").orElse(0.0F),
+                compound.getFloat("rotZ").orElse(0.0F)
+        );
     }
 
-    public void serialize(CompoundTag tag) {
-        tag.putString("particleId", particleId.toString());
-        tag.putString("expression", expression.getExpStr());
-        tag.putDouble("emitterRandom1", emitterRandom1);
-        tag.putDouble("emitterRandom2", emitterRandom2);
-        tag.putDouble("emitterRandom3", emitterRandom3);
-        tag.putDouble("emitterRandom4", emitterRandom4);
-        tag.putDouble("posX", pos.x);
-        tag.putDouble("posY", pos.y);
-        tag.putDouble("posZ", pos.z);
-        tag.putBoolean("hideOutline", hideOutline);
+    public void serialize(CompoundTag compound) {
+        compound.putString("particleId", particleId.toString());
+        compound.putString("expression", expression.getExpStr());
+        compound.putDouble("emitterRandom1", emitterRandom1);
+        compound.putDouble("emitterRandom2", emitterRandom2);
+        compound.putDouble("emitterRandom3", emitterRandom3);
+        compound.putDouble("emitterRandom4", emitterRandom4);
+        compound.putDouble("posX", pos.x);
+        compound.putDouble("posY", pos.y);
+        compound.putDouble("posZ", pos.z);
+        compound.putFloat("rotX", rot.x);
+        compound.putFloat("rotY", rot.y);
+        compound.putFloat("rotZ", rot.z);
     }
 
     public double getX() {
@@ -360,27 +381,27 @@ public class ParticleEmitter implements MolangInstance {
     }
 
     @Override
-    public float getRandom1() {
+    public double getRandom1() {
         return emitterRandom1;
     }
 
     @Override
-    public float getRandom2() {
+    public double getRandom2() {
         return emitterRandom2;
     }
 
     @Override
-    public float getRandom3() {
+    public double getRandom3() {
         return emitterRandom3;
     }
 
     @Override
-    public float getRandom4() {
+    public double getRandom4() {
         return emitterRandom4;
     }
 
     @Override
-    public ResourceLocation getIdentity() {
+    public Identifier getIdentity() {
         return particleId;
     }
 
@@ -402,5 +423,10 @@ public class ParticleEmitter implements MolangInstance {
     @Override
     public ParticleEmitter getEmitter() {
         return this;
+    }
+
+    public enum ParentMode {
+        LOCATOR,
+        WORLD
     }
 }

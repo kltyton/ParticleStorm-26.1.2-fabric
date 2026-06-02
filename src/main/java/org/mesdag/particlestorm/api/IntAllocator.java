@@ -1,24 +1,29 @@
 package org.mesdag.particlestorm.api;
 
-import it.unimi.dsi.fastutil.ints.IntHeapPriorityQueue;
-import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
-import it.unimi.dsi.fastutil.ints.IntPriorityQueue;
-import it.unimi.dsi.fastutil.ints.IntSet;
 import org.mesdag.particlestorm.ParticleStorm;
 
+import java.util.HashSet;
+import java.util.PriorityQueue;
+import java.util.Set;
+
 public class IntAllocator {
-    private final IntPriorityQueue availableIds;
-    private final IntSet usedIds;
+    private final PriorityQueue<Integer> availableIds;
+    private final Set<Integer> usedIds;
     private int nextId;
 
     public IntAllocator() {
-        this.availableIds = new IntHeapPriorityQueue();
-        this.usedIds = new IntOpenHashSet();
+        this.availableIds = new PriorityQueue<>();
+        this.usedIds = new HashSet<>();
         this.nextId = 0;
     }
 
     public int allocate() {
-        int id = availableIds.isEmpty() ? nextId++ : availableIds.dequeueInt();
+        int id;
+        if (availableIds.isEmpty()) {
+            id = nextId++;
+        } else {
+            id = availableIds.poll();
+        }
         usedIds.add(id);
         return id;
     }
@@ -26,7 +31,7 @@ public class IntAllocator {
     public void release(int id) {
         if (usedIds.contains(id)) {
             usedIds.remove(id);
-            availableIds.enqueue(id);
+            availableIds.offer(id);
         } else {
             ParticleStorm.LOGGER.warn("ID {} is not currently allocated.", id);
         }
