@@ -120,6 +120,7 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
             }
             if (emitterPreset.localRotation) {
                 MathHelper.applyEuler(emitter.rot.x, emitter.rot.y, 0.0F, position);
+                MathHelper.applyEuler(emitter.rot.x, emitter.rot.y, 0.0F, speed);
             }
             if (emitter.parentMode == ParticleEmitter.ParentMode.WORLD || emitterPreset.localPosition) {
                 Vec3 emitterPos = emitter.getPosition();

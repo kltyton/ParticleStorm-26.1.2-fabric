@@ -391,10 +391,22 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
     public void extract(@NotNull QuadParticleRenderState state, @NotNull Camera camera, float partialTicks) {
         Quaternionf quaternionf = new Quaternionf();
         getFacingCameraMode().setRotation(this, quaternionf, camera, partialTicks);
+        applyEmitterTransformRotation(quaternionf);
         if (xRot != 0.0F) quaternionf.rotateX(Mth.lerp(partialTicks, xRotO, xRot));
         if (yRot != 0.0F) quaternionf.rotateY(Mth.lerp(partialTicks, yRotO, yRot));
         if (roll != 0.0F) quaternionf.rotateZ(Mth.lerp(partialTicks, oRoll, roll));
         extractRotatedQuad(state, camera, quaternionf, partialTicks);
+    }
+
+    private void applyEmitterTransformRotation(Quaternionf quaternionf) {
+        if (emitter == null || !emitter.getPreset().localRotation) {
+            return;
+        }
+
+        FaceCameraMode mode = getFacingCameraMode();
+        if (mode == FaceCameraMode.EMITTER_TRANSFORM_XY || mode == FaceCameraMode.EMITTER_TRANSFORM_XZ || mode == FaceCameraMode.EMITTER_TRANSFORM_YZ) {
+            quaternionf.rotateX(emitter.rot.x).rotateY(emitter.rot.y);
+        }
     }
 
     @Override
