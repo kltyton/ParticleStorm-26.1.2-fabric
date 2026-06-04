@@ -24,6 +24,8 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.mesdag.particlestorm.api.IComponent;
 import org.mesdag.particlestorm.api.IEventNode;
+import org.mesdag.particlestorm.api.RegisterCustomComponentEvent;
+import org.mesdag.particlestorm.api.RegisterCustomEventNodeEvent;
 import org.mesdag.particlestorm.api.RegisterCustomParticleTypeEvent;
 import org.mesdag.particlestorm.data.component.*;
 import org.mesdag.particlestorm.data.event.*;
@@ -32,11 +34,11 @@ import org.mesdag.particlestorm.network.EmitterCreationPacketS2C;
 import org.mesdag.particlestorm.network.EmitterRemovalPacket;
 import org.mesdag.particlestorm.network.EmitterSynchronizePacket;
 import org.mesdag.particlestorm.particle.MolangParticleInstance;
-import org.mesdag.particlestorm.particle.MolangParticleLoader;
+import org.mesdag.particlestorm.particle.MolangParticleEngine;
 import org.mesdag.particlestorm.particle.ParticleEmitter;
 
 public final class PSGameClient implements ClientModInitializer {
-    public static final MolangParticleLoader LOADER = new MolangParticleLoader();
+    public static final MolangParticleEngine LOADER = MolangParticleEngine.INSTANCE;
     public static final SingleQuadParticle.Layer PARTICLE_ADD = new SingleQuadParticle.Layer(
             true,
             TextureAtlas.LOCATION_PARTICLES,
@@ -57,7 +59,7 @@ public final class PSGameClient implements ClientModInitializer {
         RegisterCustomParticleTypeEvent.registerDefaults();
 
         ParticleProviderRegistry.getInstance().register(ParticleStorm.MOLANG, new MolangParticleInstance.Provider());
-        ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloadListener(MolangParticleLoader.RELOADER_ID, LOADER);
+        ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloadListener(MolangParticleEngine.RELOADER_ID, LOADER);
         ClientTickEvents.START_LEVEL_TICK.register(level -> tick());
 
         ClientPlayNetworking.registerGlobalReceiver(EmitterCreationPacketS2C.TYPE, EmitterCreationPacketS2C::handleClient);
@@ -140,6 +142,8 @@ public final class PSGameClient implements ClientModInitializer {
         IComponent.register("particle_kill_plane", ParticleLifetimeKillPlane.CODEC);
         IComponent.register("particle_expire_if_in_blocks", ParticleExpireIfInBlocks.CODEC);
         IComponent.register("particle_expire_if_not_in_blocks", ParticleExpireIfNotInBlocks.CODEC);
+
+        PSModClient.registerCustomComponent(new RegisterCustomComponentEvent());
     }
 
     private static void registerEventNodes() {
@@ -150,5 +154,7 @@ public final class PSGameClient implements ClientModInitializer {
         IEventNode.register("sound_effect", SoundEffect.CODEC.codec());
         IEventNode.register("expression", NodeMolangExp.CODEC);
         IEventNode.register("log", EventLog.CODEC);
+
+        PSModClient.registerCustomEventNode(new RegisterCustomEventNodeEvent());
     }
 }

@@ -4,13 +4,13 @@
   "package": "org.mesdag.particlestorm.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
+  ],
+  "client": [
     "BlockEntityMixin",
     "EntityMixin",
     "LivingEntityMixin",
     "PlayerMixin",
-    "TextureAtlasSpriteMixin"
-  ],
-  "client": [
+    "TextureAtlasSpriteMixin",
     "ParticleAccessor",
     "QuadParticleGroupMixin",
     "integration.geckolib.AnimationControllerMixin",
@@ -22,8 +22,5 @@
   ],
   "injectors": {
     "defaultRequire": 1
-  },
-  "overwrites": {
-    "requireAnnotations": true
   }
 }

@@ -45,7 +45,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 @SuppressWarnings("all")
-public class MolangParticleLoader implements PreparableReloadListener {
+public final class MolangParticleEngine implements PreparableReloadListener {
+    public static final MolangParticleEngine INSTANCE = new MolangParticleEngine();
     public static final Identifier RELOADER_ID = ParticleStorm.asResource("reloader");
     private static final FileToIdConverter PARTICLE_LISTER = FileToIdConverter.json("particle_definitions");
     private Map<Identifier, DefinedParticleEffect> id2Effect = new Hashtable<>();
@@ -56,6 +57,9 @@ public class MolangParticleLoader implements PreparableReloadListener {
     private final IntAllocator allocator = new IntAllocator();
 
     private boolean initialized = false;
+
+    private MolangParticleEngine() {
+    }
 
     public Map<Identifier, DefinedParticleEffect> id2Effect() {
         return id2Effect;

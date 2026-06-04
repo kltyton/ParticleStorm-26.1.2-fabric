@@ -1,6 +1,8 @@
 package org.mesdag.particlestorm;
 
 import org.mesdag.particlestorm.api.RegisterCustomParticleTypeEvent;
+import org.mesdag.particlestorm.api.RegisterCustomComponentEvent;
+import org.mesdag.particlestorm.api.RegisterCustomEventNodeEvent;
 import org.mesdag.particlestorm.particle.MolangParticleInstance;
 
 public final class PSModClient {
@@ -11,5 +13,11 @@ public final class PSModClient {
         event.registerWithSprites(ParticleStorm.MOLANG, (emitter, particlePreset, level, x, y, z, sprites) ->
                 new MolangParticleInstance(particlePreset, level, x, y, z, level.getRandom())
         );
+    }
+
+    public static void registerCustomComponent(RegisterCustomComponentEvent event) {
+    }
+
+    public static void registerCustomEventNode(RegisterCustomEventNodeEvent event) {
     }
 }

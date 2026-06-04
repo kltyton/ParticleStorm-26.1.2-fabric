@@ -118,7 +118,7 @@ public final class GeckoLibHelper {
     }
 
     public static void setCurrentEntity(Object animatable, @Nullable Entity entity) {
-        if (animatable instanceof GeoWithCurrentEntity withCurrentEntity) {
+        if (animatable instanceof ParticleStormGeoReplacedEntity withCurrentEntity) {
             withCurrentEntity.setCurrentEntity(entity);
         }
     }
@@ -251,7 +251,7 @@ public final class GeckoLibHelper {
             level = entity.level();
             basePos = entity.position();
             variableTable = IEntity.of(entity).particlestorm$getVariableTable();
-        } else if (animatable instanceof GeoWithCurrentEntity withCurrentEntity && withCurrentEntity.getCurrentEntity() != null) {
+        } else if (animatable instanceof ParticleStormGeoReplacedEntity withCurrentEntity && withCurrentEntity.getCurrentEntity() != null) {
             entity = withCurrentEntity.getCurrentEntity();
             level = entity.level();
             basePos = entity.position();
