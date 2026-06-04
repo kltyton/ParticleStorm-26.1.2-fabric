@@ -12,6 +12,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.PSDiagnostics;
@@ -36,6 +37,7 @@ public class ParticleEmitter implements MolangInstance {
     public Identifier particleId;
     public MolangExp expression;
 
+    public transient Matrix4f parentSpace;
     public transient ParentMode parentMode = ParentMode.WORLD;
     public transient Vec3 offsetPos = Vec3.ZERO;
     public transient Vector3f offsetRot = new Vector3f();
@@ -122,6 +124,7 @@ public class ParticleEmitter implements MolangInstance {
                     this.parentPosition = parent.parentPosition;
                     this.parentRotation = parent.parentRotation;
                     this.parentMode = parent.parentMode;
+                    this.parentSpace = parent.parentSpace;
                 }
                 case PARTICLE -> this.isManual = true;
                 case PARTICLE_WITH_VELOCITY -> {
@@ -242,12 +245,17 @@ public class ParticleEmitter implements MolangInstance {
                 remove();
                 return;
             }
-            if (parentRotation != null) {
-                rot.set(parentRotation).add(offsetRot.x, offsetRot.y + getAttachedYRot() * Mth.DEG_TO_RAD, offsetRot.z);
-            }
-            Vector3f rotated = offsetPos.toVector3f().rotateZ(rot.z).rotateY(rot.y).rotateX(rot.x);
-            if (parentPosition != null) {
-                rotated.add(parentPosition);
+            Vector3f rotated;
+            if (isLocalSpace()) {
+                rotated = new Vector3f(parentSpace.m30(), parentSpace.m31(), parentSpace.m32());
+            } else {
+                if (parentRotation != null) {
+                    rot.set(parentRotation).add(offsetRot.x, offsetRot.y + getAttachedYRot() * Mth.DEG_TO_RAD, offsetRot.z);
+                }
+                rotated = offsetPos.toVector3f().rotateZ(rot.z).rotateY(rot.y).rotateX(rot.x);
+                if (parentPosition != null) {
+                    rotated.add(parentPosition);
+                }
             }
             this.pos = new Vec3(attached.getX() + rotated.x, attached.getY() + rotated.y, attached.getZ() + rotated.z);
         } else if (attachedBlock != null) {
@@ -255,12 +263,17 @@ public class ParticleEmitter implements MolangInstance {
                 remove();
                 return;
             }
-            if (parentRotation != null) {
-                rot.set(parentRotation).add(offsetRot);
-            }
-            Vector3f rotated = offsetPos.toVector3f().rotateZ(rot.z).rotateY(rot.y).rotateX(rot.x);
-            if (parentPosition != null) {
-                rotated.add(parentPosition);
+            Vector3f rotated;
+            if (isLocalSpace()) {
+                rotated = new Vector3f(parentSpace.m30(), parentSpace.m31(), parentSpace.m32());
+            } else {
+                if (parentRotation != null) {
+                    rot.set(parentRotation).add(offsetRot);
+                }
+                rotated = offsetPos.toVector3f().rotateZ(rot.z).rotateY(rot.y).rotateX(rot.x);
+                if (parentPosition != null) {
+                    rotated.add(parentPosition);
+                }
             }
             BlockPos pos1 = attachedBlock.getBlockPos();
             this.pos = new Vec3(pos1.getX() + 0.5 + rotated.x, pos1.getY() + rotated.y, pos1.getZ() + 0.5 + rotated.z);
@@ -280,6 +293,25 @@ public class ParticleEmitter implements MolangInstance {
 
     private float getAttachedYRot() {
         return attached instanceof LivingEntity living ? -living.yBodyRot : attached.getYRot();
+    }
+
+    public void local2World(Vector3f vec, float partialTick) {
+        if (isLocalSpace()) {
+            if (preset.localRotation) {
+                vec.mulDirection(parentSpace);
+            }
+            if (preset.localPosition) {
+                vec.add(
+                        (float) Mth.lerp((double) partialTick, posO.x, pos.x),
+                        (float) Mth.lerp((double) partialTick, posO.y, pos.y),
+                        (float) Mth.lerp((double) partialTick, posO.z, pos.z)
+                );
+            }
+        }
+    }
+
+    public boolean isLocalSpace() {
+        return parentSpace != null;
     }
 
     public void remove() {

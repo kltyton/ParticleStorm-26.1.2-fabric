@@ -66,6 +66,13 @@ public final class MolangQueries {
         return text;
     }
 
+    public static String applyQueryAliases(String text) {
+        if (text.startsWith("q.")) {
+            return "query" + text.substring(1);
+        }
+        return text;
+    }
+
     private static void setDefaultQueryValues() {
         registerQueryVariable("query.cardinal_player_facing", p -> Minecraft.getInstance().player == null ? 0.0 : Minecraft.getInstance().player.getDirection().ordinal());
         registerQueryVariable("query.day", p -> p.getLevel().getGameTime() / 24000d);

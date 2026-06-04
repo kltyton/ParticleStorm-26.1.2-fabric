@@ -78,7 +78,7 @@ public final class EmitterLifetimeEvents implements IEmitterComponent {
     public void update(ParticleEmitter emitter) {
         for (int i = emitter.lastTimeline; i < sortedTimeline.size(); i++) {
             Tuple<Function<Integer, Boolean>, List<String>> tuple = sortedTimeline.get(i);
-            if (tuple.getA().apply(emitter.lifetime)) {
+            if (tuple.getA().apply(emitter.age)) {
                 emitter.lastTimeline = i + 1;
                 executes(emitter, tuple.getB());
                 break;

@@ -61,7 +61,7 @@ public final class ParticleLifeTimeEvents implements IParticleComponent {
     public void update(IMolangParticleInstance instance) {
         for (int i = instance.getLastTimeline(); i < sortedTimeline.size(); i++) {
             Tuple<Function<Integer, Boolean>, List<String>> tuple = sortedTimeline.get(i);
-            if (tuple.getA().apply(instance.self().getLifetime())) {
+            if (tuple.getA().apply(instance.getAge())) {
                 instance.setLastTimeline(i + 1);
                 executes(instance, tuple.getB());
                 break;

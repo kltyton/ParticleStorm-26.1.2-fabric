@@ -107,29 +107,21 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
                 component.apply(instance);
             }
             speed.mul(instance.getInitialSpeed());
-            if (emitter.parentMode == ParticleEmitter.ParentMode.LOCATOR) {
-                position.x *= -1;
-                position.y *= -1;
-                speed.x *= -1;
-                speed.y *= -1;
-            }
             EmitterPreset emitterPreset = emitter.getPreset();
-            if (emitter.parentMode != ParticleEmitter.ParentMode.WORLD && emitterPreset.localPosition && !emitterPreset.localRotation) {
-                speed.x *= -1;
-                speed.z *= -1;
-            }
-            if (emitterPreset.localRotation) {
-                MathHelper.applyEuler(emitter.rot.x, emitter.rot.y, 0.0F, position);
-                MathHelper.applyEuler(emitter.rot.x, emitter.rot.y, 0.0F, speed);
-            }
-            if (emitter.parentMode == ParticleEmitter.ParentMode.WORLD || emitterPreset.localPosition) {
+            speed.mul(emitter.invTickRate);
+
+            if (emitter.isLocalSpace()) {
+                if (!emitterPreset.localPosition) {
+                    Vec3 emitterPos = emitter.getPosition();
+                    position.add((float) emitterPos.x, (float) emitterPos.y, (float) emitterPos.z);
+                }
+                if (emitter.getAttachedEntity() != null && emitterPreset.localVelocity) {
+                    Vec3 emitterVec = emitter.getAttachedEntity().getDeltaMovement();
+                    speed.add((float) emitterVec.x, (float) emitterVec.y, (float) emitterVec.z);
+                }
+            } else {
                 Vec3 emitterPos = emitter.getPosition();
                 position.add((float) emitterPos.x, (float) emitterPos.y, (float) emitterPos.z);
-            }
-            speed.mul(emitter.invTickRate);
-            if (emitter.getAttachedEntity() != null && emitterPreset.localVelocity) {
-                Vec3 emitterVec = emitter.getAttachedEntity().getDeltaMovement();
-                speed.add((float) emitterVec.x, (float) emitterVec.y, (float) emitterVec.z);
             }
 
             instance.setParticleSpeed(speed.x, speed.y, speed.z);

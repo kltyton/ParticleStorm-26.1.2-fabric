@@ -11,8 +11,11 @@
     "TextureAtlasSpriteMixin"
   ],
   "client": [
+    "ParticleAccessor",
+    "QuadParticleGroupMixin",
     "integration.geckolib.AnimationControllerMixin",
     "integration.geckolib.AnimationTimelineMixin",
+    "integration.geckolib.GeoLocatorMixin",
     "integration.geckolib.GeoReplacedEntityRendererMixin",
     "integration.geckolib.MolangQueriesMixin",
     "integration.geckolib.RenderPassInfoMixin"

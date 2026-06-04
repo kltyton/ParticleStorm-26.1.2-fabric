@@ -3,8 +3,11 @@ package org.mesdag.particlestorm.data.event;
 import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
 import org.mesdag.particlestorm.ParticleStorm;
 import org.mesdag.particlestorm.api.IEventNode;
+import org.mesdag.particlestorm.api.IMolangParticleInstance;
 import org.mesdag.particlestorm.api.MolangInstance;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 import org.mesdag.particlestorm.data.molang.compiler.MolangParser;
@@ -31,6 +34,8 @@ public final class NodeMolangExp extends MolangExp implements IEventNode {
         return log;
     }
 
+    private static final Vector3f POSITION = new Vector3f();
+
     @Override
     public void execute(MolangInstance instance) {
         if (variable == null && !expStr.isEmpty() && !expStr.isBlank()) {
@@ -40,7 +45,14 @@ public final class NodeMolangExp extends MolangExp implements IEventNode {
         if (variable != null) {
             double v = variable.get(instance);
             if (log) {
-                ParticleStorm.LOGGER.info("{}[{}]: {}={}", instance.getIdentity(), instance.getPosition(), expStr, v);
+                if (instance instanceof IMolangParticleInstance particle) {
+                    POSITION.set((float) particle.getX(), (float) particle.getY(), (float) particle.getZ());
+                    particle.getEmitter().local2World(POSITION, 1.0F);
+                } else {
+                    Vec3 pos = instance.getPosition();
+                    POSITION.set((float) pos.x, (float) pos.y, (float) pos.z);
+                }
+                ParticleStorm.LOGGER.info("{}[{},{},{}]: {}={}", instance.getIdentity(), POSITION.x, POSITION.y, POSITION.z, expStr, v);
             }
         }
     }

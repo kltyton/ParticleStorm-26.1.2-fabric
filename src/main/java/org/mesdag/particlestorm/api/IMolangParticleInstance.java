@@ -48,6 +48,10 @@ public interface IMolangParticleInstance extends MolangInstance {
 
     void setExpireOnContact(boolean b);
 
+    void setCollisionRadius(float radius);
+
+    float getCollisionRadius();
+
     void setComponents(List<IParticleComponent> components);
 
     float getScaleU();
@@ -101,6 +105,10 @@ public interface IMolangParticleInstance extends MolangInstance {
     void setUV(float u, float v, float w, float h);
 
     void setCollision(boolean bool);
+
+    void discard();
+
+    boolean isDiscarded();
 
     // region default
     default void moveDirectly(double x, double y, double z) {

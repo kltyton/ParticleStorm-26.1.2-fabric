@@ -125,7 +125,7 @@ public final class PSGameClient implements ClientModInitializer {
 
         IComponent.register("particle_initial_speed", ParticleInitialSpeed.CODEC);
         IComponent.register("particle_initial_spin", ParticleInitialSpin.CODEC);
-        IComponent.register("particle_initialization", ParticleInitialization.CODEC);
+        IComponent.register(ParticleInitialization.ID, ParticleInitialization.CODEC);
 
         IComponent.register(ParticleMotionDynamic.ID, ParticleMotionDynamic.CODEC);
         IComponent.register("particle_motion_parametric", ParticleMotionParametric.CODEC);

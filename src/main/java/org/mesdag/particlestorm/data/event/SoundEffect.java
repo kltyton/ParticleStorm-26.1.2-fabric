@@ -11,7 +11,9 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
 import org.mesdag.particlestorm.api.IEventNode;
+import org.mesdag.particlestorm.api.IMolangParticleInstance;
 import org.mesdag.particlestorm.api.MolangInstance;
 
 public record SoundEffect(Holder<SoundEvent> soundEffect) implements IEventNode {
@@ -22,9 +24,16 @@ public record SoundEffect(Holder<SoundEvent> soundEffect) implements IEventNode 
             SOUND_EFFECT_CODEC.fieldOf("sound_effect").orElseGet(() -> Holder.direct(SoundEvents.EMPTY)).forGetter(SoundEffect::soundEffect)
     ).apply(instance, SoundEffect::new));
 
+    private static final Vector3f VECTOR = new Vector3f();
+
     @Override
     public void execute(MolangInstance instance) {
-        Vec3 position = instance.getPosition();
-        instance.getLevel().playLocalSound(position.x, position.y, position.z, soundEffect.value(), SoundSource.AMBIENT, 1.0F, 1.0F, true);
+        if (instance instanceof IMolangParticleInstance particle) {
+            particle.getEmitter().local2World(VECTOR.set((float) particle.getX(), (float) particle.getY(), (float) particle.getZ()), 1.0F);
+        } else {
+            Vec3 position = instance.getPosition();
+            VECTOR.set(position.x, position.y, position.z);
+        }
+        instance.getLevel().playLocalSound(VECTOR.x, VECTOR.y, VECTOR.z, soundEffect.value(), SoundSource.AMBIENT, 1.0F, 1.0F, true);
     }
 }

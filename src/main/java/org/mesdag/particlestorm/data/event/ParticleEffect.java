@@ -9,8 +9,11 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ByIdMap;
 import net.minecraft.util.StringRepresentable;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
 import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.api.IEventNode;
+import org.mesdag.particlestorm.api.IMolangParticleInstance;
 import org.mesdag.particlestorm.api.MolangInstance;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 import org.mesdag.particlestorm.data.molang.compiler.MolangQueries;
@@ -35,9 +38,17 @@ public record ParticleEffect(Identifier effect, Type type, MolangExp preEffectEx
         this(effect, type, preEffectExpression, List.of());
     }
 
+    private static final Vector3f VECTOR = new Vector3f();
+
     @Override
     public void execute(MolangInstance instance) {
-        PSGameClient.LOADER.addEmitter(new ParticleEmitter(instance.getEmitter(), this), false);
+        ParticleEmitter emitter = new ParticleEmitter(instance.getEmitter(), this);
+        if (instance instanceof IMolangParticleInstance particle) {
+            particle.getEmitter().local2World(VECTOR.set((float) particle.getX(), (float) particle.getY(), (float) particle.getZ()), 1.0F);
+            emitter.setPos(new Vec3(VECTOR.x, VECTOR.y, VECTOR.z));
+            emitter.posO = emitter.getPosition();
+        }
+        PSGameClient.LOADER.addEmitter(emitter, false);
     }
 
     @Override

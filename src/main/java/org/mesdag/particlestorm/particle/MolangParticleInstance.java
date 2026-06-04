@@ -6,6 +6,7 @@ import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.ParticleProvider;
 import net.minecraft.client.particle.ParticleRenderType;
 import net.minecraft.client.particle.SingleQuadParticle;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.particles.ParticleLimit;
@@ -15,6 +16,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -46,6 +48,7 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
     protected Vector3f acceleration = new Vector3f();
     protected Vector3f facingDirection = new Vector3f();
     protected Vector3f initialSpeed = new Vector3f();
+    protected final Vector3f renderPosition = new Vector3f();
     protected float xRot = 0.0F;
     protected float yRot = 0.0F;
     protected float xRotO = 0.0F;
@@ -54,6 +57,7 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
     protected boolean hasCollision = false;
     protected float collisionDrag = 0.0F;
     protected float coefficientOfRestitution = 0.0F;
+    protected float collisionRadius = 0.0F;
     protected boolean expireOnContact = false;
 
     protected final double particleRandom1;
@@ -165,6 +169,16 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
     @Override
     public void setExpireOnContact(boolean b) {
         this.expireOnContact = b;
+    }
+
+    @Override
+    public void setCollisionRadius(float radius) {
+        this.collisionRadius = radius;
+    }
+
+    @Override
+    public float getCollisionRadius() {
+        return collisionRadius;
     }
 
     @Override
@@ -310,6 +324,16 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
     }
 
     @Override
+    public void discard() {
+        remove();
+    }
+
+    @Override
+    public boolean isDiscarded() {
+        return removed;
+    }
+
+    @Override
     public VariableTable getVars() {
         return vars;
     }
@@ -392,22 +416,44 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
     public void extract(@NotNull QuadParticleRenderState state, @NotNull Camera camera, float partialTicks) {
         Quaternionf quaternionf = new Quaternionf();
         getFacingCameraMode().setRotation(this, quaternionf, camera, partialTicks);
-        applyEmitterTransformRotation(quaternionf);
         if (xRot != 0.0F) quaternionf.rotateX(Mth.lerp(partialTicks, xRotO, xRot));
         if (yRot != 0.0F) quaternionf.rotateY(Mth.lerp(partialTicks, yRotO, yRot));
         if (roll != 0.0F) quaternionf.rotateZ(Mth.lerp(partialTicks, oRoll, roll));
+
+        if (emitter != null && emitter.isLocalSpace()) {
+            Vec3 camPos = camera.position();
+            renderPosition.set(
+                    (float) Mth.lerp((double) partialTicks, xo, x),
+                    (float) Mth.lerp((double) partialTicks, yo, y),
+                    (float) Mth.lerp((double) partialTicks, zo, z)
+            );
+            emitter.local2World(renderPosition, partialTicks);
+            renderPosition.sub((float) camPos.x, (float) camPos.y, (float) camPos.z);
+            extractRotatedQuad(state, quaternionf, renderPosition.x, renderPosition.y, renderPosition.z, partialTicks);
+            return;
+        }
         extractRotatedQuad(state, camera, quaternionf, partialTicks);
     }
 
-    private void applyEmitterTransformRotation(Quaternionf quaternionf) {
-        if (emitter == null || !emitter.getPreset().localRotation) {
-            return;
+    public boolean particlestorm$isVisible(Frustum frustum, float partialTick) {
+        if (emitter != null && emitter.isLocalSpace()) {
+            renderPosition.set(
+                    (float) Mth.lerp((double) partialTick, xo, x),
+                    (float) Mth.lerp((double) partialTick, yo, y),
+                    (float) Mth.lerp((double) partialTick, zo, z)
+            );
+            emitter.local2World(renderPosition, partialTick);
+            float size = Math.max(getBillboardWidth(partialTick), getBillboardHeight(partialTick));
+            return frustum.isVisible(new AABB(
+                    renderPosition.x - size,
+                    renderPosition.y - size,
+                    renderPosition.z - size,
+                    renderPosition.x + size,
+                    renderPosition.y + size,
+                    renderPosition.z + size
+            ));
         }
-
-        FaceCameraMode mode = getFacingCameraMode();
-        if (mode == FaceCameraMode.EMITTER_TRANSFORM_XY || mode == FaceCameraMode.EMITTER_TRANSFORM_XZ || mode == FaceCameraMode.EMITTER_TRANSFORM_YZ) {
-            quaternionf.rotateX(emitter.rot.x).rotateY(emitter.rot.y);
-        }
+        return frustum.pointInFrustum(x, y, z);
     }
 
     @Override
@@ -480,7 +526,19 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
         double d1 = y;
         double d2 = z;
         if (hasPhysics && hasCollision && (x != 0.0 || y != 0.0 || z != 0.0) && x * x + y * y + z * z < MAXIMUM_COLLISION_VELOCITY_SQUARED) {
-            Vec3 vec3 = Entity.collideBoundingBox(null, new Vec3(x, y, z), getBoundingBox(), level, List.of());
+            AABB aabb = getBoundingBox();
+            if (collisionRadius > 0.0F) {
+                aabb = aabb.inflate(collisionRadius, 0.0, collisionRadius);
+            }
+            if (emitter != null && emitter.isLocalSpace()) {
+                emitter.local2World(renderPosition.set((float) aabb.minX, (float) aabb.minY, (float) aabb.minZ), 1.0F);
+                float minX = renderPosition.x;
+                float minY = renderPosition.y;
+                float minZ = renderPosition.z;
+                emitter.local2World(renderPosition.set((float) aabb.maxX, (float) aabb.maxY, (float) aabb.maxZ), 1.0F);
+                aabb = new AABB(minX, minY, minZ, renderPosition.x, renderPosition.y, renderPosition.z);
+            }
+            Vec3 vec3 = Entity.collideBoundingBox(null, new Vec3(x, y, z), aabb, level, List.of());
             if (x != vec3.x) {
                 this.xd = -Mth.sign(xd) * (Math.abs(xd) - collisionDrag) * coefficientOfRestitution;
             }

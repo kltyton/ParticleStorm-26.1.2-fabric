@@ -4,9 +4,12 @@ import com.geckolib.animatable.GeoAnimatable;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.state.KeyFrameEvent;
 import com.geckolib.cache.animation.keyframeevent.ParticleKeyframeData;
+import com.geckolib.cache.model.GeoLocator;
 import com.geckolib.constant.DataTickets;
 import com.geckolib.renderer.base.GeoRenderState;
 import com.geckolib.renderer.base.RenderPassInfo;
+import com.geckolib.util.RenderUtil;
+import com.mojang.blaze3d.vertex.PoseStack;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
@@ -15,7 +18,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Vector3f;
+import org.joml.Matrix4f;
 import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.PSDiagnostics;
 import org.mesdag.particlestorm.data.molang.MolangExp;
@@ -24,12 +27,15 @@ import org.mesdag.particlestorm.mixed.IBlockEntity;
 import org.mesdag.particlestorm.mixed.IEntity;
 import org.mesdag.particlestorm.particle.ParticleEmitter;
 
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
 public final class GeckoLibHelper {
     private static final Map<AnimatableManager<?>, Map<LocatorParticleKey, BoundEmitter>> LOCATOR_EMITTERS = new WeakHashMap<>();
+    private static final Map<RenderPassInfo<?>, Map<GeoLocator, List<BoundEmitter>>> ACTIVE_LOCATOR_EMITTERS = new WeakHashMap<>();
     private static final ThreadLocal<RenderPassInfo<?>> CURRENT_RENDER_PASS = new ThreadLocal<>();
 
     private GeckoLibHelper() {
@@ -94,6 +100,7 @@ public final class GeckoLibHelper {
         if (CURRENT_RENDER_PASS.get() == renderPassInfo) {
             CURRENT_RENDER_PASS.remove();
         }
+        ACTIVE_LOCATOR_EMITTERS.remove(renderPassInfo);
     }
 
     public static void removeEmitters(GeoRenderState renderState) {
@@ -145,7 +152,7 @@ public final class GeckoLibHelper {
         ParticleEmitter emitter = new ParticleEmitter(context.level(), context.basePos(), particleId, MolangExp.EMPTY);
         PSGameClient.LOADER.addEmitter(emitter, false);
         attachContext(emitter, context);
-        emitter.parentMode = ParticleEmitter.ParentMode.LOCATOR;
+        emitter.parentSpace = new Matrix4f();
         BoundEmitter newBound = new BoundEmitter(emitter.id, locator, particleId, context.basePos(), context.entity(), context.blockEntity());
         emitters.put(key, newBound);
         attachCurrentRenderPassListener(newBound, emitter);
@@ -187,14 +194,6 @@ public final class GeckoLibHelper {
                 modelPos,
                 localPos
         );
-        if (bound.entity() != null) {
-            Vec3 relative = target.subtract(bound.entity().position());
-            emitter.parentPosition = new Vector3f((float) relative.x, (float) relative.y, (float) relative.z);
-        } else if (bound.blockEntity() != null) {
-            Vec3 base = bound.blockEntity().getBlockPos().getBottomCenter();
-            Vec3 relative = target.subtract(base);
-            emitter.parentPosition = new Vector3f((float) relative.x, (float) relative.y, (float) relative.z);
-        }
     }
 
     private static void attachCurrentRenderPassListener(BoundEmitter bound, ParticleEmitter emitter) {
@@ -205,7 +204,39 @@ public final class GeckoLibHelper {
     }
 
     private static void attachLocatorListener(RenderPassInfo<?> renderPassInfo, BoundEmitter bound, ParticleEmitter emitter) {
-        renderPassInfo.addLocatorPositionListener(bound.locator(), (worldPos, modelPos, localPos) -> updateEmitterPosition(emitter, bound, worldPos, modelPos, localPos));
+        renderPassInfo.model().getLocator(bound.locator()).ifPresent(locator -> {
+            List<BoundEmitter> bounds = ACTIVE_LOCATOR_EMITTERS
+                    .computeIfAbsent(renderPassInfo, ignored -> new Object2ObjectOpenHashMap<>())
+                    .computeIfAbsent(locator, ignored -> new ArrayList<>());
+            if (!bounds.contains(bound)) {
+                bounds.add(bound);
+            }
+            renderPassInfo.addLocatorPositionListener(bound.locator(), (worldPos, modelPos, localPos) -> updateEmitterPosition(emitter, bound, worldPos, modelPos, localPos));
+        });
+    }
+
+    public static void captureLocatorTransform(GeoLocator locator, PoseStack poseStack, RenderPassInfo<?> renderPassInfo) {
+        Map<GeoLocator, List<BoundEmitter>> locators = ACTIVE_LOCATOR_EMITTERS.get(renderPassInfo);
+        if (locators == null) {
+            return;
+        }
+        List<BoundEmitter> bounds = locators.get(locator);
+        if (bounds == null || bounds.isEmpty()) {
+            return;
+        }
+
+        Matrix4f localPose = RenderUtil.extractPoseFromRoot(new Matrix4f(poseStack.last().pose()), renderPassInfo.getPreRenderMatrixState());
+        for (BoundEmitter bound : bounds) {
+            ParticleEmitter emitter = PSGameClient.LOADER.getEmitter(bound.emitterId());
+            if (emitter == null || emitter.isRemoved()) {
+                continue;
+            }
+            if (emitter.parentSpace == null) {
+                emitter.parentSpace = new Matrix4f(localPose);
+            } else {
+                emitter.parentSpace.set(localPose);
+            }
+        }
     }
 
     private static @Nullable ParticleContext createContext(GeoAnimatable animatable, GeoRenderState renderState) {
