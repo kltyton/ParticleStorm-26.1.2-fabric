@@ -18,12 +18,17 @@ public class IntAllocator {
     }
 
     public int allocate() {
-        int id;
-        if (availableIds.isEmpty()) {
-            id = nextId++;
-        } else {
-            id = availableIds.poll();
+        while (!availableIds.isEmpty()) {
+            int id = availableIds.poll();
+            if (usedIds.add(id)) {
+                return id;
+            }
         }
+
+        while (usedIds.contains(nextId)) {
+            nextId++;
+        }
+        int id = nextId++;
         usedIds.add(id);
         return id;
     }
@@ -42,7 +47,13 @@ public class IntAllocator {
     }
 
     public boolean forceAllocate(int id) {
-        return usedIds.add(id);
+        boolean wasAllocated = usedIds.contains(id);
+        usedIds.add(id);
+        availableIds.remove(id);
+        if (id >= nextId) {
+            nextId = id + 1;
+        }
+        return wasAllocated;
     }
 
     public void clear() {
