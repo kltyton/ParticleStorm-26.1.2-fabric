@@ -106,9 +106,7 @@ public final class MolangParticleEngine implements PreparableReloadListener {
                 ParticleEmitter emitter = iterator.next().getValue();
                 try {
                     if (emitter.isRemoved() || emitter.level.dimension() != localPlayer.level().dimension()) {
-                        allocator.release(emitter.id);
-                        emitter.onRemove();
-                        emitter.remove();
+                        removeEmitterNoUpdate(emitter);
                         iterator.remove();
                     } else if (Mth.square(emitter.pos.x - localPlayer.getX()) + Mth.square(emitter.pos.z - localPlayer.getZ()) < renderDistSqr) {
                         emitter.tick();
@@ -117,7 +115,7 @@ public final class MolangParticleEngine implements PreparableReloadListener {
                     ParticleStorm.LOGGER.warn("Error ticking: {}", e.getMessage());
                     e.printStackTrace();
                     if (emitter != null) {
-                        emitter.remove();
+                        removeEmitterNoUpdate(emitter);
                     }
                     iterator.remove();
                 }
@@ -173,12 +171,18 @@ public final class MolangParticleEngine implements PreparableReloadListener {
         removeEmitter(emitter.id, sync);
     }
 
+    private void removeEmitterNoUpdate(ParticleEmitter emitter) {
+        emitter.onRemove();
+        emitter.remove();
+        allocator.release(emitter.id);
+    }
+
     public ParticleEmitter removeEmitter(int id, boolean sync) {
         ParticleEmitter removed = emitters.remove(id);
-        if (removed != null) {
-            removed.onRemove();
+        if (removed == null) {
+            return null;
         }
-        allocator.release(id);
+        removeEmitterNoUpdate(removed);
         if (sync) EmitterRemovalPacket.sendToServer(id);
         return removed;
     }
