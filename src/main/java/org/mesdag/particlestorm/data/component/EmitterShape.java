@@ -5,7 +5,6 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
-import net.minecraft.core.particles.ParticleLimit;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.StringRepresentable;
@@ -135,6 +134,7 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
             instance.setComponents(particlePreset.effect.orderedParticleComponentsWhichRequireUpdate);
             if (!particlePreset.motionDynamic) instance.setParticleSpeed(0.0, 0.0, 0.0);
             Minecraft.getInstance().particleEngine.add(instance);
+            emitter.onAdded();
             if (instance instanceof MolangParticleInstance molang) {
                 PSDiagnostics.infoFirstN("particle-created:" + emitter.id, 12, "particle created runtimeId={} particle={} state={}", emitter.id, emitter.particleId, molang.diagnosticSummary());
             } else {
@@ -167,8 +167,7 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
     }
 
     private static boolean hasSpaceInParticleLimit(ParticleEmitter emitter) {
-        ParticleLimit particleGroup = emitter.particleGroup;
-        return particleGroup == null || Minecraft.getInstance().particleEngine.trackedParticleCounts.getInt(particleGroup) < particleGroup.limit();
+        return emitter.hasSpace();
     }
 
     /// This component spawns particles using a disc shape, particles can be spawned inside the shape or on its outer perimeter.
@@ -299,7 +298,11 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
 
         @Override
         public List<MolangExp> getAllMolangExp() {
-            return List.of(direction.direct.exp1(), direction.direct.exp2(), direction.direct.exp3());
+            return List.of(
+                    offset.exp1(), offset.exp2(), offset.exp3(),
+                    halfDimensions.exp1(), halfDimensions.exp2(), halfDimensions.exp3(),
+                    direction.direct.exp1(), direction.direct.exp2(), direction.direct.exp3()
+            );
         }
 
         @Override

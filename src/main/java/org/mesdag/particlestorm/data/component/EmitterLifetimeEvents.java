@@ -6,6 +6,7 @@ import org.mesdag.particlestorm.data.Tuple;
 import org.mesdag.particlestorm.ParticleStorm;
 import org.mesdag.particlestorm.api.IEmitterComponent;
 import org.mesdag.particlestorm.api.IEventNode;
+import org.mesdag.particlestorm.data.event.EventResolver;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 import org.mesdag.particlestorm.particle.ParticleEmitter;
 
@@ -135,7 +136,7 @@ public final class EmitterLifetimeEvents implements IEmitterComponent {
 
     private static void executes(ParticleEmitter emitter, List<String> triggers) {
         for (String event : triggers) {
-            for (IEventNode node : emitter.getPreset().events.get(event).values()) {
+            for (IEventNode node : EventResolver.resolve(emitter.getPreset().events, event).values()) {
                 node.execute(emitter);
             }
         }

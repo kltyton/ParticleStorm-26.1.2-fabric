@@ -48,6 +48,7 @@ import org.mesdag.particlestorm.particle.ParticleEmitter;
 public final class PSGameClient {
     public static final MolangParticleEngine LOADER = MolangParticleEngine.INSTANCE;
     public static SingleQuadParticle.Layer PARTICLE_ADD;
+    public static SingleQuadParticle.Layer PARTICLE_BLEND;
 
     private PSGameClient() {
     }
@@ -66,6 +67,20 @@ public final class PSGameClient {
                 additivePipeline
         );
         event.registerPipeline(additivePipeline);
+
+        RenderPipeline blendPipeline = RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET)
+                .withLocation(ParticleStorm.asResource("pipeline/blend_particle"))
+                .withFragmentShader(ParticleStorm.asResource("core/particle_no_discard"))
+                .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                .withCull(true)
+                .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                .build();
+        PARTICLE_BLEND = new SingleQuadParticle.Layer(
+                true,
+                TextureAtlas.LOCATION_PARTICLES,
+                blendPipeline
+        );
+        event.registerPipeline(blendPipeline);
     }
 
     @SubscribeEvent

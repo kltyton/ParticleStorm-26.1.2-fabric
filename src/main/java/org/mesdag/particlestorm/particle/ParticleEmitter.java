@@ -66,6 +66,7 @@ public class ParticleEmitter implements MolangInstance {
     public transient int activeTime = 0;
     public transient int fullLoopTime = 0;
     public transient ParticleLimit particleGroup;
+    public transient int activeParticleCount = 0;
     public transient int spawnDuration = 1;
     public transient int spawnRate = 0;
     public transient boolean spawned = false;
@@ -336,6 +337,23 @@ public class ParticleEmitter implements MolangInstance {
 
     public boolean isRemoved() {
         return removed || (attached != null && attached.isRemoved()) || (attachedBlock != null && attachedBlock.isRemoved());
+    }
+
+    /// Whether this emitter may spawn another particle. Without a particle group it is unlimited; otherwise bounded by the living particle count of this emitter only.
+    public boolean hasSpace() {
+        return particleGroup == null || activeParticleCount < particleGroup.limit();
+    }
+
+    /// Must be called once per particle successfully added to the particle engine for this emitter.
+    public void onAdded() {
+        activeParticleCount++;
+    }
+
+    /// Must be called once when a particle owned by this emitter is removed. Clamped to zero to stay safe against redundant removals.
+    public void onRemoved() {
+        if (activeParticleCount > 0) {
+            activeParticleCount--;
+        }
     }
 
     public void setPos(Vec3 pos) {

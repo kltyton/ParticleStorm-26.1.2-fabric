@@ -53,6 +53,15 @@ public class VariableTable {
         }
     }
 
+    public void setValue(String name, double value) {
+        Variable variable = table.get(name);
+        if (variable == null) {
+            table.put(name, new Variable(name, value));
+        } else {
+            variable.set(value);
+        }
+    }
+
     public void setValue(String name, Variable value) {
         Variable variable = table.get(name);
         if (variable == null) {

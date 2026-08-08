@@ -8,6 +8,7 @@ import org.mesdag.particlestorm.ParticleStorm;
 import org.mesdag.particlestorm.api.IEventNode;
 import org.mesdag.particlestorm.api.IMolangParticleInstance;
 import org.mesdag.particlestorm.api.IParticleComponent;
+import org.mesdag.particlestorm.data.event.EventResolver;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 
 import java.util.ArrayList;
@@ -93,7 +94,7 @@ public final class ParticleLifeTimeEvents implements IParticleComponent {
 
     private static void executes(IMolangParticleInstance instance, List<String> triggers) {
         for (String event : triggers) {
-            for (IEventNode node : instance.getPreset().effect.events.get(event).values()) {
+            for (IEventNode node : EventResolver.resolve(instance.getPreset().effect.events, event).values()) {
                 node.execute(instance);
             }
         }

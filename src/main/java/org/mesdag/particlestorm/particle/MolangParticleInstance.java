@@ -28,6 +28,7 @@ import org.mesdag.particlestorm.api.IEventNode;
 import org.mesdag.particlestorm.api.IMolangParticleInstance;
 import org.mesdag.particlestorm.api.IParticleComponent;
 import org.mesdag.particlestorm.data.component.ParticleMotionCollision;
+import org.mesdag.particlestorm.data.event.EventResolver;
 import org.mesdag.particlestorm.data.molang.VariableTable;
 import org.mesdag.particlestorm.mixed.ITextureAtlasSprite;
 
@@ -223,7 +224,7 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
 
     @Override
     public void setMaxFrame(int frame) {
-        this.maxFrame = frame;
+        this.maxFrame = Math.max(frame, 1);
     }
 
     @Override
@@ -574,7 +575,7 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
                     for (ParticleMotionCollision.Event event : preset.collisionEvents) {
                         float tickSpeed = event.minSpeed() * getInvTickRate();
                         if (tickSpeed * tickSpeed < xd * xd + yd * yd + zd * zd) {
-                            for (IEventNode node : preset.effect.events.get(event.event()).values()) {
+                            for (IEventNode node : EventResolver.resolve(preset.effect.events, event.event()).values()) {
                                 node.execute(this);
                             }
                         }
@@ -589,8 +590,10 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
 
     @Override
     public void remove() {
-        if (preset.lifeTimeEvents != null) {
-            preset.lifeTimeEvents.onExpiration(this);
+        if (!removed) {
+            if (preset.lifeTimeEvents != null) {
+                preset.lifeTimeEvents.onExpiration(this);
+            }
         }
         super.remove();
     }
@@ -617,7 +620,7 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
 
     @Override
     public @NotNull Optional<ParticleLimit> getParticleLimit() {
-        return Optional.ofNullable(particleGroup);
+        return Optional.empty();
     }
 
     @Override
