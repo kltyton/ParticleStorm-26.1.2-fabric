@@ -1,6 +1,6 @@
 package org.mesdag.particlestorm;
 
-import net.fabricmc.loader.api.FabricLoader;
+import net.neoforged.fml.loading.FMLPaths;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -25,7 +25,8 @@ public final class PSClientConfigs {
         properties.setProperty(DEBUG, "false");
         properties.setProperty(SHOW_EMITTER_OUTLINE, "true");
 
-        Path path = FabricLoader.getInstance().getConfigDir().resolve(ParticleStorm.MODID + ".properties");
+        // NeoForge native config directory; keeps the existing user-visible properties-file format.
+        Path path = FMLPaths.CONFIGDIR.get().resolve(ParticleStorm.MODID + ".properties");
         if (Files.notExists(path)) {
             writeDefaults(path, properties);
         }

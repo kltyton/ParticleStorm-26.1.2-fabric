@@ -1,14 +1,15 @@
 package org.mesdag.particlestorm.network;
 
 import io.netty.buffer.ByteBuf;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.ParticleStorm;
 import org.mesdag.particlestorm.mixed.IPlayerPersistentData;
@@ -29,12 +30,12 @@ public record EmitterSynchronizePacket(int id, CompoundTag tag) implements Custo
         return TYPE;
     }
 
-    public static void handleClient(EmitterSynchronizePacket payload, ClientPlayNetworking.Context context) {
+    public static void handleClient(EmitterSynchronizePacket payload, IPayloadContext context) {
         Player player = context.player();
         PSGameClient.LOADER.loadEmitter(player.level(), payload.id, payload.tag);
     }
 
-    public static void handleServer(EmitterSynchronizePacket payload, ServerPlayNetworking.Context context) {
+    public static void handleServer(EmitterSynchronizePacket payload, IPayloadContext context) {
         CompoundTag emitters = getEmitterData(context.player(), true);
         emitters.put(Integer.toString(payload.id), payload.tag.copy());
     }
@@ -42,15 +43,13 @@ public record EmitterSynchronizePacket(int id, CompoundTag tag) implements Custo
     public static void syncToServer(ParticleEmitter emitter) {
         CompoundTag tag = new CompoundTag();
         emitter.serialize(tag);
-        if (ClientPlayNetworking.canSend(TYPE)) {
-            ClientPlayNetworking.send(new EmitterSynchronizePacket(emitter.id, tag));
-        }
+        ClientPacketDistributor.sendToServer(new EmitterSynchronizePacket(emitter.id, tag));
     }
 
     public static void syncToClient(ServerPlayer player, int id) {
         CompoundTag emitters = getEmitterData(player, false);
         if (emitters.contains(Integer.toString(id))) {
-            ServerPlayNetworking.send(player, new EmitterSynchronizePacket(id, emitters.getCompoundOrEmpty(Integer.toString(id))));
+            PacketDistributor.sendToPlayer(player, new EmitterSynchronizePacket(id, emitters.getCompoundOrEmpty(Integer.toString(id))));
         } else {
             ParticleStorm.LOGGER.warn("No persisted emitter {} for player {}", id, player.getGameProfile());
         }
@@ -60,7 +59,7 @@ public record EmitterSynchronizePacket(int id, CompoundTag tag) implements Custo
         CompoundTag emitters = getEmitterData(player, false);
         for (String id : emitters.keySet()) {
             try {
-                ServerPlayNetworking.send(player, new EmitterSynchronizePacket(Integer.parseInt(id), emitters.getCompoundOrEmpty(id)));
+                PacketDistributor.sendToPlayer(player, new EmitterSynchronizePacket(Integer.parseInt(id), emitters.getCompoundOrEmpty(id)));
             } catch (NumberFormatException exception) {
                 ParticleStorm.LOGGER.warn("Invalid persisted emitter id '{}' for player {}", id, player.getGameProfile());
             }

@@ -7,6 +7,13 @@
 # Gradle build folder
 build
 
+# Python tool caches
+__pycache__/
+*.py[cod]
+
+# Datagen incremental cache (generated resources themselves remain tracked)
+src/generated/resources/.cache/
+
 # IntelliJ
 out/
 .idea

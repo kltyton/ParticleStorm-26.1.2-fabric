@@ -1,14 +1,15 @@
 package org.mesdag.particlestorm.network;
 
 import io.netty.buffer.ByteBuf;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.ParticleStorm;
 import org.mesdag.particlestorm.particle.ParticleEmitter;
@@ -26,7 +27,7 @@ public record EmitterRemovalPacket(int id) implements CustomPacketPayload {
         return TYPE;
     }
 
-    public static void handleClient(EmitterRemovalPacket payload, ClientPlayNetworking.Context context) {
+    public static void handleClient(EmitterRemovalPacket payload, IPayloadContext context) {
         Player player = context.player();
         ParticleEmitter emitter = PSGameClient.LOADER.removeEmitter(payload.id, false);
         if (emitter == null) {
@@ -36,18 +37,16 @@ public record EmitterRemovalPacket(int id) implements CustomPacketPayload {
         }
     }
 
-    public static void handleServer(EmitterRemovalPacket payload, ServerPlayNetworking.Context context) {
+    public static void handleServer(EmitterRemovalPacket payload, IPayloadContext context) {
         EmitterSynchronizePacket.getEmitterData(context.player(), false).remove(Integer.toString(payload.id));
     }
 
     public static void sendToServer(int id) {
-        if (ClientPlayNetworking.canSend(TYPE)) {
-            ClientPlayNetworking.send(new EmitterRemovalPacket(id));
-        }
+        ClientPacketDistributor.sendToServer(new EmitterRemovalPacket(id));
     }
 
     public static void sendToClient(ServerPlayer player, int id) {
         EmitterSynchronizePacket.getEmitterData(player, false).remove(Integer.toString(id));
-        ServerPlayNetworking.send(player, new EmitterRemovalPacket(id));
+        PacketDistributor.sendToPlayer(player, new EmitterRemovalPacket(id));
     }
 }

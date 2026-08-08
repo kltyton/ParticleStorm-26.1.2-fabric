@@ -5,23 +5,25 @@ import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.CompareOp;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.particle.v1.ParticleProviderRegistry;
-import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.debug.DebugScreenEntries;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.TextureAtlas;
-import net.minecraft.server.packs.PackType;
 import net.minecraft.gizmos.GizmoStyle;
 import net.minecraft.gizmos.Gizmos;
 import net.minecraft.gizmos.TextGizmo;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
+import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
+import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 import org.mesdag.particlestorm.api.IComponent;
 import org.mesdag.particlestorm.api.IEventNode;
 import org.mesdag.particlestorm.api.RegisterCustomComponentEvent;
@@ -33,42 +35,69 @@ import org.mesdag.particlestorm.network.EmitterAttachPacketS2C;
 import org.mesdag.particlestorm.network.EmitterCreationPacketS2C;
 import org.mesdag.particlestorm.network.EmitterRemovalPacket;
 import org.mesdag.particlestorm.network.EmitterSynchronizePacket;
-import org.mesdag.particlestorm.particle.MolangParticleInstance;
 import org.mesdag.particlestorm.particle.MolangParticleEngine;
+import org.mesdag.particlestorm.particle.MolangParticleInstance;
 import org.mesdag.particlestorm.particle.ParticleEmitter;
 
-public final class PSGameClient implements ClientModInitializer {
+/**
+ * NeoForge client entry/state holder.
+ * Registered on the mod event bus (Dist.CLIENT); game-bus client events live in {@link PSClientEvents}.
+ * The class name and static state are kept so the particle package keeps its existing static references.
+ */
+@EventBusSubscriber(modid = ParticleStorm.MODID, value = Dist.CLIENT)
+public final class PSGameClient {
     public static final MolangParticleEngine LOADER = MolangParticleEngine.INSTANCE;
-    public static final SingleQuadParticle.Layer PARTICLE_ADD = new SingleQuadParticle.Layer(
-            true,
-            TextureAtlas.LOCATION_PARTICLES,
-            RenderPipelines.register(RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET)
-                    .withLocation(ParticleStorm.asResource("pipeline/additive_particle"))
-                    .withColorTargetState(new ColorTargetState(BlendFunction.LIGHTNING))
-                    .withCull(true)
-                    .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
-                    .build()
-            )
-    );
+    public static SingleQuadParticle.Layer PARTICLE_ADD;
 
-    @Override
-    public void onInitializeClient() {
-        PSClientConfigs.onLoad();
+    private PSGameClient() {
+    }
+
+    @SubscribeEvent
+    public static void registerRenderPipelines(RegisterRenderPipelinesEvent event) {
+        RenderPipeline additivePipeline = RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET)
+                .withLocation(ParticleStorm.asResource("pipeline/additive_particle"))
+                .withColorTargetState(new ColorTargetState(BlendFunction.LIGHTNING))
+                .withCull(true)
+                .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                .build();
+        PARTICLE_ADD = new SingleQuadParticle.Layer(
+                true,
+                TextureAtlas.LOCATION_PARTICLES,
+                additivePipeline
+        );
+        event.registerPipeline(additivePipeline);
+    }
+
+    @SubscribeEvent
+    public static void registerParticleProvider(RegisterParticleProvidersEvent event) {
+        event.registerSpecial(ParticleStorm.MOLANG, new MolangParticleInstance.Provider());
+    }
+
+    @SubscribeEvent
+    public static void registerClientPayloadHandlers(RegisterClientPayloadHandlersEvent event) {
+        // Client-side payload handlers. Registered per side on the default main thread:
+        // no explicit HandlerThread.NETWORK and no enqueueWork.
+        event.register(EmitterCreationPacketS2C.TYPE, EmitterCreationPacketS2C::handleClient);
+        event.register(EmitterAttachPacketS2C.TYPE, EmitterAttachPacketS2C::handleClient);
+        event.register(EmitterRemovalPacket.TYPE, EmitterRemovalPacket::handleClient);
+        event.register(EmitterSynchronizePacket.TYPE, EmitterSynchronizePacket::handleClient);
+    }
+
+    @SubscribeEvent
+    public static void addReloadListeners(AddClientReloadListenersEvent event) {
+        event.addListener(MolangParticleEngine.RELOADER_ID, LOADER);
+    }
+
+    @SubscribeEvent
+    public static void fmlClientSetup(FMLClientSetupEvent event) {
+        // Mirrors the Fabric client initializer order: register codecs/event nodes/defaults once
+        // during client setup, before the reload listener starts parsing particle definitions.
         registerComponents();
         registerEventNodes();
         RegisterCustomParticleTypeEvent.registerDefaults();
-
-        ParticleProviderRegistry.getInstance().register(ParticleStorm.MOLANG, new MolangParticleInstance.Provider());
-        ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloadListener(MolangParticleEngine.RELOADER_ID, LOADER);
-        ClientTickEvents.START_LEVEL_TICK.register(level -> tick());
-
-        ClientPlayNetworking.registerGlobalReceiver(EmitterCreationPacketS2C.TYPE, EmitterCreationPacketS2C::handleClient);
-        ClientPlayNetworking.registerGlobalReceiver(EmitterAttachPacketS2C.TYPE, EmitterAttachPacketS2C::handleClient);
-        ClientPlayNetworking.registerGlobalReceiver(EmitterRemovalPacket.TYPE, EmitterRemovalPacket::handleClient);
-        ClientPlayNetworking.registerGlobalReceiver(EmitterSynchronizePacket.TYPE, EmitterSynchronizePacket::handleClient);
     }
 
-    private static void tick() {
+    public static void tick() {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer localPlayer = minecraft.player;
         if (localPlayer == null) {

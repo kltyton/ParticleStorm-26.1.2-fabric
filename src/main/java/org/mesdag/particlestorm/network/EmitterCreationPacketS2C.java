@@ -1,8 +1,6 @@
 package org.mesdag.particlestorm.network;
 
 import io.netty.buffer.ByteBuf;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -11,6 +9,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 import org.mesdag.particlestorm.PSGameClient;
@@ -36,7 +36,7 @@ public record EmitterCreationPacketS2C(Identifier id, Vector3f pos, MolangExp ex
         return TYPE;
     }
 
-    public static void handleClient(EmitterCreationPacketS2C payload, ClientPlayNetworking.Context context) {
+    public static void handleClient(EmitterCreationPacketS2C payload, IPayloadContext context) {
         Player player = context.player();
         Identifier resolved = PSGameClient.LOADER.resolveParticleId(payload.id);
         if (resolved == null) {
@@ -97,6 +97,6 @@ public record EmitterCreationPacketS2C(Identifier id, Vector3f pos, MolangExp ex
                 expression == null ? "" : expression.getExpStr(),
                 entity == null ? "none" : entity.getScoreboardName()
         );
-        ServerPlayNetworking.send(player, new EmitterCreationPacketS2C(id, pos, expression, entity == null ? -1 : entity.getId()));
+        PacketDistributor.sendToPlayer(player, new EmitterCreationPacketS2C(id, pos, expression, entity == null ? -1 : entity.getId()));
     }
 }

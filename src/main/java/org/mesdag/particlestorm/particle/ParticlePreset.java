@@ -10,6 +10,7 @@ import org.mesdag.particlestorm.api.MolangInstance;
 import org.mesdag.particlestorm.data.DefinedParticleEffect;
 import org.mesdag.particlestorm.data.MathHelper;
 import org.mesdag.particlestorm.data.component.*;
+import org.mesdag.particlestorm.data.description.DescriptionMaterial;
 import org.mesdag.particlestorm.data.curve.ParticleCurve;
 import org.mesdag.particlestorm.data.molang.FloatMolangExp;
 import org.mesdag.particlestorm.data.molang.MolangExp;
