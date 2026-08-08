@@ -50,7 +50,7 @@ public class ParticlePreset {
             case particles_add -> PSGameClient.PARTICLE_ADD;
             case particles_blend, PARTICLE_SHEET_TRANSLUCENT -> SingleQuadParticle.Layer.TRANSLUCENT;
             case particles_alpha, PARTICLE_SHEET_LIT -> SingleQuadParticle.Layer.TRANSLUCENT;
-            case CUSTOM -> SingleQuadParticle.Layer.TRANSLUCENT;
+            case CUSTOM -> SingleQuadParticle.Layer.OPAQUE;
             default -> null;
         };
         if (effect.components.get(ParticleAppearanceBillboard.ID) instanceof ParticleAppearanceBillboard component) {
