@@ -97,7 +97,7 @@ public final class ParticleCurve {
                 ArrayList<Tuple<Float, CurveNode>> e = nodes.nodeList;
                 if (e.isEmpty()) return 0.0F;
                 int index = 0;
-                while (index < e.size() && !(e.get(index).getA() > index)) index++;
+                while (index < e.size() && !(e.get(index).getA() > i)) index++;
                 Tuple<Float, CurveNode> r = index == 0 ? FIRST : e.get(index - 1);
                 Tuple<Float, CurveNode> s = index == e.size() ? LAST : e.get(index);
                 float rTime = r.getA();
