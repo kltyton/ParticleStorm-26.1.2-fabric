@@ -23,7 +23,6 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.mesdag.particlestorm.PSDiagnostics;
-import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.api.IEventNode;
 import org.mesdag.particlestorm.api.IMolangParticleInstance;
 import org.mesdag.particlestorm.api.IParticleComponent;
@@ -432,7 +431,13 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
             extractRotatedQuad(state, quaternionf, renderPosition.x, renderPosition.y, renderPosition.z, partialTicks);
             return;
         }
-        extractRotatedQuad(state, camera, quaternionf, partialTicks);
+        Vec3 camPos = camera.position();
+        renderPosition.set(
+                (float) (Mth.lerp(partialTicks, xo, x) - camPos.x),
+                (float) (Mth.lerp(partialTicks, yo, y) - camPos.y) + MIN_RENDER_SIZE,
+                (float) (Mth.lerp(partialTicks, zo, z) - camPos.z)
+        );
+        extractRotatedQuad(state, quaternionf, renderPosition.x, renderPosition.y, renderPosition.z, partialTicks);
     }
 
     public boolean particlestorm$isVisible(Frustum frustum, float partialTick) {
@@ -513,10 +518,8 @@ public class MolangParticleInstance extends SingleQuadParticle implements IMolan
     private void addBillboardFace(QuadParticleRenderState state, Quaternionf orientation, float x, float y, float z, float size, float u0, float u1, float v0, float v1, int color, int light) {
         SingleQuadParticle.Layer layer = getLayer();
         state.add(layer, x, y, z, orientation.x, orientation.y, orientation.z, orientation.w, size, u0, u1, v0, v1, color, light);
-        if (layer == PSGameClient.PARTICLE_ADD) {
-            Quaternionf back = new Quaternionf(orientation).rotateY(Mth.PI);
-            state.add(layer, x, y, z, back.x, back.y, back.z, back.w, size, u1, u0, v0, v1, color, light);
-        }
+        Quaternionf back = new Quaternionf(orientation).rotateY(Mth.PI);
+        state.add(layer, x, y, z, back.x, back.y, back.z, back.w, size, u1, u0, v0, v1, color, light);
     }
 
     @Override
