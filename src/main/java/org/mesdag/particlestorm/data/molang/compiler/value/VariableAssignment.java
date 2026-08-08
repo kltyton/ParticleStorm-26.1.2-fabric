@@ -14,7 +14,8 @@ import org.mesdag.particlestorm.data.molang.compiler.MathValue;
 public record VariableAssignment(Variable variable, MathValue value) implements MathValue {
     @Override
     public double get(MolangInstance instance) {
-        variable.set(value.get(instance));
+        // Write into the current instance's variable table so concurrent instances never mutate the shared preset Variable.
+        instance.getVars().setValue(variable.name(), value.get(instance));
         return 0;
     }
 

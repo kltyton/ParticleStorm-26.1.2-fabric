@@ -47,14 +47,15 @@ public class ParticlePreset {
             case TERRAIN_SHEET -> SingleQuadParticle.Layer.OPAQUE_TERRAIN;
             case particles_opaque, PARTICLE_SHEET_OPAQUE -> SingleQuadParticle.Layer.OPAQUE;
             case particles_add -> PSGameClient.PARTICLE_ADD;
-            case particles_blend, PARTICLE_SHEET_TRANSLUCENT -> SingleQuadParticle.Layer.TRANSLUCENT;
-            case particles_alpha, PARTICLE_SHEET_LIT -> SingleQuadParticle.Layer.TRANSLUCENT;
+            case particles_blend -> PSGameClient.PARTICLE_BLEND;
+            case PARTICLE_SHEET_TRANSLUCENT -> SingleQuadParticle.Layer.TRANSLUCENT;
+            case particles_alpha, PARTICLE_SHEET_LIT -> SingleQuadParticle.Layer.OPAQUE;
             case CUSTOM -> SingleQuadParticle.Layer.OPAQUE;
             default -> null;
         };
         if (effect.components.get(ParticleAppearanceBillboard.ID) instanceof ParticleAppearanceBillboard component) {
             this.facingCameraMode = FaceCameraMode.fromComponent(component.faceCameraMode());
-            this.minSpeedThresholdSqr = Mth.square(component.direction().minSpeedThreshold());
+            this.minSpeedThresholdSqr = Mth.square(Math.max(component.direction().minSpeedThreshold(), 0.0F));
             this.invTextureWidth = 1.0F / component.uv().texturewidth();
             this.invTextureHeight = 1.0F / component.uv().textureheight();
         } else {

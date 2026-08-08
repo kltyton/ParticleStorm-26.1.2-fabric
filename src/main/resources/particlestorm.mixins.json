@@ -12,6 +12,8 @@
     "PlayerMixin",
     "TextureAtlasSpriteMixin",
     "ParticleAccessor",
+    "ParticleMixin",
+    "ParticleEngineAccessor",
     "QuadParticleGroupMixin",
     "integration.geckolib.AnimationControllerMixin",
     "integration.geckolib.AnimationTimelineMixin",

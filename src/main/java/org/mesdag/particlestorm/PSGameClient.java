@@ -50,6 +50,18 @@ public final class PSGameClient implements ClientModInitializer {
                     .build()
             )
     );
+    public static final SingleQuadParticle.Layer PARTICLE_BLEND = new SingleQuadParticle.Layer(
+            true,
+            TextureAtlas.LOCATION_PARTICLES,
+            RenderPipelines.register(RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET)
+                    .withLocation(ParticleStorm.asResource("pipeline/blend_particle"))
+                    .withFragmentShader(ParticleStorm.asResource("core/particle_no_discard"))
+                    .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                    .withCull(true)
+                    .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false))
+                    .build()
+            )
+    );
 
     @Override
     public void onInitializeClient() {
@@ -92,7 +104,7 @@ public final class PSGameClient implements ClientModInitializer {
         try {
             for (ParticleEmitter emitter : LOADER.getEmitters()) {
                 Vec3 pos = emitter.pos;
-                int particleCount = emitter.particleGroup == null ? 0 : minecraft.particleEngine.trackedParticleCounts.getInt(emitter.particleGroup);
+                int particleCount = emitter.activeParticleCount;
                 int limit = emitter.particleGroup == null ? 0 : emitter.particleGroup.limit();
                 int countColor = limit > 0 && particleCount >= limit ? 0xFFFF0000 : 0xFFFFFFFF;
 

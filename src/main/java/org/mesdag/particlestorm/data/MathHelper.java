@@ -105,7 +105,8 @@ public class MathHelper {
 
     public static void redirect(List<VariableAssignment> toInit, VariableTable vars) {
         for (VariableAssignment assignment : toInit) {
-            // 閲嶅畾鍚戯紝闃叉鍥犳壘涓嶅埌鍙橀噺鑰岀垎鏍?            vars.setValue(assignment.variable().name(), assignment.value());
+            // 重定向，防止因找不到变量而报错
+            vars.setValue(assignment.variable().name(), assignment.value());
         }
     }
 }
