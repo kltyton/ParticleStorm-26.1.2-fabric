@@ -148,7 +148,7 @@ public abstract sealed class EmitterRate implements IEmitterComponent permits Em
         public void apply(ParticleEmitter emitter) {
             int limit = (int) maxParticles.calculate(emitter);
             emitter.particleGroup = new ParticleLimit(limit);
-            emitter.spawnRate = limit;
+            emitter.spawnRate = 1;
         }
 
         @Override
