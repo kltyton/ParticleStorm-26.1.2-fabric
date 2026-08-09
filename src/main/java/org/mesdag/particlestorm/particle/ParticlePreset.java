@@ -3,22 +3,23 @@ package org.mesdag.particlestorm.particle;
 import com.google.common.collect.Iterables;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.util.Mth;
+import net.neoforged.fml.ModLoader;
 import org.jetbrains.annotations.Nullable;
 import org.mesdag.particlestorm.PSGameClient;
+import org.mesdag.particlestorm.api.IEventNode;
 import org.mesdag.particlestorm.api.IParticleComponent;
 import org.mesdag.particlestorm.api.MolangInstance;
+import org.mesdag.particlestorm.api.ParticlePresetLoadedEvent;
 import org.mesdag.particlestorm.data.DefinedParticleEffect;
-import org.mesdag.particlestorm.data.MathHelper;
 import org.mesdag.particlestorm.data.component.*;
 import org.mesdag.particlestorm.data.description.DescriptionMaterial;
 import org.mesdag.particlestorm.data.curve.ParticleCurve;
+import org.mesdag.particlestorm.data.event.NodeMolangExp;
 import org.mesdag.particlestorm.data.molang.FloatMolangExp;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 import org.mesdag.particlestorm.data.molang.VariableTable;
-import org.mesdag.particlestorm.data.molang.compiler.MathValue;
 import org.mesdag.particlestorm.data.molang.compiler.MolangParser;
 import org.mesdag.particlestorm.data.molang.compiler.value.Variable;
-import org.mesdag.particlestorm.data.molang.compiler.value.VariableAssignment;
 
 import java.util.*;
 
@@ -37,7 +38,7 @@ public class ParticlePreset {
     public boolean motionDynamic;
 
     public VariableTable vars;
-    public List<VariableAssignment> assignments;
+    public @Nullable ParticleInitialization initialization;
 
     /// For custom preset data
     protected Map<Class<?>, Object> tickets;
@@ -68,11 +69,24 @@ public class ParticlePreset {
         this.environmentLighting = effect.components.containsValue(ParticleAppearanceLighting.INSTANCE);
         this.lifeTimeEvents = (ParticleLifeTimeEvents) effect.components.get(ParticleLifeTimeEvents.ID);
         ParticleMotionCollision motionCollision = (ParticleMotionCollision) effect.components.get(ParticleMotionCollision.ID);
-        if (motionCollision != null) this.collisionEvents = motionCollision.events();
-        this.motionDynamic = effect.components.get(ParticleMotionDynamic.ID) != null;
+        this.motionDynamic = effect.components.containsKey(ParticleMotionDynamic.ID);
 
         VariableTable table = new VariableTable(addDefaultVariables(), null);
         MolangParser parser = new MolangParser(table);
+        if (motionCollision != null) {
+            this.collisionEvents = motionCollision.events();
+            for (ParticleMotionCollision.Event event : collisionEvents) {
+                Map<String, IEventNode> nodes = effect.events.get(event.event());
+                if (nodes == null) {
+                    throw new IllegalStateException("Unknown event id: " + event.event());
+                }
+                for (IEventNode node : nodes.values()) {
+                    if (node instanceof NodeMolangExp exp) {
+                        exp.compile(parser);
+                    }
+                }
+            }
+        }
         for (Map.Entry<String, ParticleCurve> entry : effect.curves.entrySet()) {
             ParticleCurve curve = entry.getValue();
             curve.input.compile(parser);
@@ -86,19 +100,15 @@ public class ParticlePreset {
             table.table.put(name, new Variable(name, p -> curve.calculate(p, name)));
         }
 
-        List<VariableAssignment> toInit = new ArrayList<>();
         for (IParticleComponent component : Iterables.concat(effect.orderedParticleEarlyComponents, effect.orderedParticleComponents)) {
             assert component != null;
             for (MolangExp exp : component.getAllMolangExp()) {
                 exp.compile(parser);
-                MathValue variable = exp.getVariable();
-                if (variable != null && !MathHelper.forAssignment(table.table, toInit, variable)) {
-                    MathHelper.forCompound(table.table, toInit, variable);
-                }
             }
         }
         this.vars = table;
-        this.assignments = toInit;
+        this.initialization = (ParticleInitialization) effect.components.get(ParticleInitialization.ID);
+        ModLoader.postEvent(new ParticlePresetLoadedEvent(this));
     }
 
     public <T> void setTicket(Class<T> clazz, T value) {

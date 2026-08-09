@@ -5,6 +5,7 @@ import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.CompareOp;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.debug.DebugScreenEntries;
 import net.minecraft.client.particle.SingleQuadParticle;
@@ -23,10 +24,12 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
 import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
+import net.neoforged.neoforge.client.event.RegisterDebugEntriesEvent;
 import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 import org.mesdag.particlestorm.api.IComponent;
 import org.mesdag.particlestorm.api.IEventNode;
 import org.mesdag.particlestorm.api.RegisterCustomComponentEvent;
+import org.mesdag.particlestorm.api.RegisterCustomEmitterTypeEvent;
 import org.mesdag.particlestorm.api.RegisterCustomEventNodeEvent;
 import org.mesdag.particlestorm.api.RegisterCustomParticleTypeEvent;
 import org.mesdag.particlestorm.data.component.*;
@@ -38,6 +41,7 @@ import org.mesdag.particlestorm.network.EmitterSynchronizePacket;
 import org.mesdag.particlestorm.particle.MolangParticleEngine;
 import org.mesdag.particlestorm.particle.MolangParticleInstance;
 import org.mesdag.particlestorm.particle.ParticleEmitter;
+import org.mesdag.particlestorm.particle.attach.EmitterAttachHandler;
 
 /**
  * NeoForge client entry/state holder.
@@ -100,6 +104,7 @@ public final class PSGameClient {
 
     @SubscribeEvent
     public static void addReloadListeners(AddClientReloadListenersEvent event) {
+        RegisterCustomEmitterTypeEvent.postEvent();
         event.addListener(MolangParticleEngine.RELOADER_ID, LOADER);
     }
 
@@ -110,6 +115,7 @@ public final class PSGameClient {
         registerComponents();
         registerEventNodes();
         RegisterCustomParticleTypeEvent.registerDefaults();
+        EmitterAttachHandler.postEvent();
     }
 
     public static void tick() {
@@ -119,8 +125,19 @@ public final class PSGameClient {
             LOADER.removeAll();
         } else if (!minecraft.isPaused() && localPlayer.level().tickRateManager().runsNormally()) {
             LOADER.tick(localPlayer);
+            if (PSClientConfigs.emitterAutoRemoveIntervalTick <= 1 || localPlayer.level().getGameTime() % PSClientConfigs.emitterAutoRemoveIntervalTick == 0) {
+                Camera camera = minecraft.gameRenderer.mainCamera();
+                if (camera.isInitialized()) {
+                    EmitterAttachHandler.tick(camera);
+                }
+            }
             collectEmitterGizmos();
         }
+    }
+
+    @SubscribeEvent
+    public static void registerDebugEntries(RegisterDebugEntriesEvent event) {
+        PSDebugEntries.register(event);
     }
 
     private static void collectEmitterGizmos() {

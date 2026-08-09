@@ -41,9 +41,7 @@ public record EmitterSynchronizePacket(int id, CompoundTag tag) implements Custo
     }
 
     public static void syncToServer(ParticleEmitter emitter) {
-        CompoundTag tag = new CompoundTag();
-        emitter.serialize(tag);
-        ClientPacketDistributor.sendToServer(new EmitterSynchronizePacket(emitter.id, tag));
+        ClientPacketDistributor.sendToServer(new EmitterSynchronizePacket(emitter.id, emitter.serialize()));
     }
 
     public static void syncToClient(ServerPlayer player, int id) {

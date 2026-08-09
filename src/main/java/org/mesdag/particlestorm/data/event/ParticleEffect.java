@@ -15,6 +15,7 @@ import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.api.IEventNode;
 import org.mesdag.particlestorm.api.IMolangParticleInstance;
 import org.mesdag.particlestorm.api.MolangInstance;
+import org.mesdag.particlestorm.api.RegisterCustomEmitterTypeEvent;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 import org.mesdag.particlestorm.data.molang.compiler.MolangQueries;
 import org.mesdag.particlestorm.particle.ParticleEmitter;
@@ -42,7 +43,7 @@ public record ParticleEffect(Identifier effect, Type type, MolangExp preEffectEx
 
     @Override
     public void execute(MolangInstance instance) {
-        ParticleEmitter emitter = new ParticleEmitter(instance.getEmitter(), this);
+        ParticleEmitter emitter = RegisterCustomEmitterTypeEvent.create(instance.getEmitter(), this);
         if (instance instanceof IMolangParticleInstance particle) {
             particle.getEmitter().local2World(VECTOR.set((float) particle.getX(), (float) particle.getY(), (float) particle.getZ()), 1.0F);
             emitter.setPos(new Vec3(VECTOR.x, VECTOR.y, VECTOR.z));

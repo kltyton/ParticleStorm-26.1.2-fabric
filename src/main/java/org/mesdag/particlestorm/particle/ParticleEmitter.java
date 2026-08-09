@@ -14,26 +14,28 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.mesdag.particlestorm.ParticleStorm;
 import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.PSDiagnostics;
 import org.mesdag.particlestorm.api.IEmitterComponent;
 import org.mesdag.particlestorm.api.MolangInstance;
-import org.mesdag.particlestorm.data.MathHelper;
 import org.mesdag.particlestorm.data.component.EmitterLifetime;
 import org.mesdag.particlestorm.data.component.EmitterRate;
 import org.mesdag.particlestorm.data.event.ParticleEffect;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 import org.mesdag.particlestorm.data.molang.VariableTable;
-import org.mesdag.particlestorm.data.molang.compiler.MathValue;
 import org.mesdag.particlestorm.data.molang.compiler.MolangParser;
 import org.mesdag.particlestorm.data.molang.compiler.value.Variable;
-import org.mesdag.particlestorm.data.molang.compiler.value.VariableAssignment;
 import org.mesdag.particlestorm.mixed.IEntity;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class ParticleEmitter implements MolangInstance {
+    public static final String TYPE_KEY = "type";
+    public static final Identifier TYPE = ParticleStorm.asResource("default");
+
+    public final Identifier type;
     public Identifier particleId;
     public MolangExp expression;
 
@@ -84,7 +86,8 @@ public class ParticleEmitter implements MolangInstance {
     public Vector3f rot = new Vector3f();
     private transient boolean removed = false;
 
-    public ParticleEmitter(Level level, Vec3 pos, Identifier particleId, MolangExp expression) {
+    public ParticleEmitter(Identifier type, Level level, Vec3 pos, Identifier particleId, MolangExp expression) {
+        this.type = type;
         this.level = level;
         setPos(pos);
         this.posO = pos;
@@ -95,11 +98,22 @@ public class ParticleEmitter implements MolangInstance {
         init();
     }
 
+    public ParticleEmitter(Level level, Vec3 pos, Identifier particleId, MolangExp expression) {
+        this(TYPE, level, pos, particleId, expression);
+    }
+
     public ParticleEmitter(Level level, Vec3 pos, Identifier particleId) {
         this(level, pos, particleId, MolangExp.EMPTY);
     }
 
     public ParticleEmitter(Level level, CompoundTag tag) {
+        Identifier type;
+        try {
+            type = Identifier.parse(tag.getString(TYPE_KEY).orElse(""));
+        } catch (Exception e) {
+            type = TYPE;
+        }
+        this.type = type;
         this.level = level;
         deserialize(tag);
         this.invTickRate = 1.0F / level.tickRateManager().tickrate();
@@ -107,6 +121,7 @@ public class ParticleEmitter implements MolangInstance {
     }
 
     public ParticleEmitter(ParticleEmitter parent, ParticleEffect effect) {
+        this.type = parent.type;
         this.level = parent.level;
         setPos(parent.pos);
         this.posO = pos;
@@ -188,14 +203,7 @@ public class ParticleEmitter implements MolangInstance {
     protected void initVars() {
         if (expression != null && !expression.initialized()) {
             expression.compile(new MolangParser(vars));
-            MathValue variable = expression.getVariable();
-            List<VariableAssignment> toInit = new ArrayList<>();
-            if (variable != null && !MathHelper.forAssignment(vars.table, toInit, variable)) {
-                MathHelper.forCompound(vars.table, toInit, variable);
-            }
-            MathHelper.redirect(toInit, vars);
         }
-        MathHelper.redirect(preset.assignments, vars);
     }
 
     protected void createComponents() {
@@ -396,6 +404,13 @@ public class ParticleEmitter implements MolangInstance {
         compound.putFloat("rotX", rot.x);
         compound.putFloat("rotY", rot.y);
         compound.putFloat("rotZ", rot.z);
+    }
+
+    public final CompoundTag serialize() {
+        CompoundTag tag = new CompoundTag();
+        tag.putString(TYPE_KEY, type.toString());
+        serialize(tag);
+        return tag;
     }
 
     public double getX() {
