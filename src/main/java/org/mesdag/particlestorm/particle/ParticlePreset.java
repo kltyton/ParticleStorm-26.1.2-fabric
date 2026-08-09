@@ -11,6 +11,7 @@ import org.mesdag.particlestorm.api.IParticleComponent;
 import org.mesdag.particlestorm.api.MolangInstance;
 import org.mesdag.particlestorm.api.ParticlePresetLoadedEvent;
 import org.mesdag.particlestorm.data.DefinedParticleEffect;
+import org.mesdag.particlestorm.data.MathHelper;
 import org.mesdag.particlestorm.data.component.*;
 import org.mesdag.particlestorm.data.curve.ParticleCurve;
 import org.mesdag.particlestorm.data.description.DescriptionMaterial;
@@ -18,6 +19,7 @@ import org.mesdag.particlestorm.data.event.NodeMolangExp;
 import org.mesdag.particlestorm.data.molang.FloatMolangExp;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 import org.mesdag.particlestorm.data.molang.VariableTable;
+import org.mesdag.particlestorm.data.molang.compiler.MathValue;
 import org.mesdag.particlestorm.data.molang.compiler.MolangParser;
 import org.mesdag.particlestorm.data.molang.compiler.value.Variable;
 import org.mesdag.particlestorm.data.molang.compiler.value.VariableAssignment;
@@ -110,8 +112,7 @@ public class ParticlePreset {
         }
         for (IParticleComponent component : Iterables.<@NotNull IParticleComponent>concat(effect.orderedParticleEarlyComponents, effect.orderedParticleComponents)) {
             for (MolangExp exp : component.getAllMolangExp()) {
-//                compileAndInitAssignments(exp, parser, toInit);
-                exp.compile(parser);
+                compileAndInitAssignments(exp, parser, toInit);
             }
         }
         this.vars = table;
@@ -119,15 +120,15 @@ public class ParticlePreset {
         NeoForge.EVENT_BUS.post(new ParticlePresetLoadedEvent(effect, this));
     }
 
-//    private static void compileAndInitAssignments(MolangExp exp, MolangParser parser, List<VariableAssignment> toInit) {
-//        exp.compile(parser);
-//        MathValue variable = exp.getVariable();
-//        if (variable == null) return;
-//        Map<String, Variable> table = parser.table().table;
-//        if (!MathHelper.forAssignment(table, toInit, variable)) {
-//            MathHelper.forCompound(table, toInit, variable);
-//        }
-//    }
+    private static void compileAndInitAssignments(MolangExp exp, MolangParser parser, List<VariableAssignment> toInit) {
+        exp.compile(parser);
+        MathValue variable = exp.getVariable();
+        if (variable == null) return;
+        Map<String, Variable> table = parser.table().table;
+        if (!MathHelper.forAssignment(table, toInit, variable)) {
+            MathHelper.forCompound(table, toInit, variable);
+        }
+    }
 
     public <T> void setTicket(Class<T> clazz, T value) {
         if (tickets == null) this.tickets = new HashMap<>();

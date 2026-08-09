@@ -30,6 +30,12 @@ neoForge {
     }
     validateAccessTransformers = true
 
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+
     runs {
         client {
             client()
@@ -62,10 +68,9 @@ neoForge {
         }
     }
 
-    mods {
-        "${mod_id}" {
-            sourceSet(sourceSets.main)
-        }
+    unitTest {
+        enable()
+        testedMod = mods.getByName(mod_id)
     }
 }
 
@@ -88,6 +93,7 @@ repositories {
 dependencies {
     compileOnly "software.bernie.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
     localRuntime "software.bernie.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
 }
 
 tasks.withType(ProcessResources).configureEach {
@@ -143,4 +149,8 @@ idea {
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
 }
