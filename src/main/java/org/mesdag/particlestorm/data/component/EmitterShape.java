@@ -8,6 +8,7 @@ import net.minecraft.client.particle.Particle;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.StringRepresentable;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
@@ -19,6 +20,7 @@ import org.mesdag.particlestorm.data.molang.FloatMolangExp;
 import org.mesdag.particlestorm.data.molang.FloatMolangExp3;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 import org.mesdag.particlestorm.particle.EmitterPreset;
+import org.mesdag.particlestorm.particle.MolangParticleEngine;
 import org.mesdag.particlestorm.particle.MolangParticleInstance;
 import org.mesdag.particlestorm.particle.ParticleEmitter;
 import org.mesdag.particlestorm.particle.ParticlePreset;
@@ -97,7 +99,9 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
             instance.setEmitter(emitter);
 
             ParticlePreset particlePreset = instance.getPreset();
-            MathHelper.redirect(particlePreset.assignments, instance.getVars());
+            if (particlePreset.initialization != null) {
+                particlePreset.initialization.perRenderExpression().calculate(instance);
+            }
 
             Vector3f position = new Vector3f();
             Vector3f speed = new Vector3f();
@@ -135,6 +139,7 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
             if (!particlePreset.motionDynamic) instance.setParticleSpeed(0.0, 0.0, 0.0);
             Minecraft.getInstance().particleEngine.add(instance);
             emitter.onAdded();
+            MolangParticleEngine.INSTANCE.registerParticle(emitter, instance);
             if (instance instanceof MolangParticleInstance molang) {
                 PSDiagnostics.infoFirstN("particle-created:" + emitter.id, 12, "particle created runtimeId={} particle={} state={}", emitter.id, emitter.particleId, molang.diagnosticSummary());
             } else {
@@ -358,7 +363,11 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
 
         @Override
         protected void initializeParticle(MolangInstance instance, Vector3f position, Vector3f speed) {
-            EntityDimensions dimensions = instance.getAttachedEntity().getDimensions(instance.getAttachedEntity().getPose());
+            Entity attachedEntity = instance.getAttachedEntity();
+            if (attachedEntity == null) {
+                throw new IllegalStateException("EmitterShape.EntityAABB requires an attached entity, but the emitter is not bound to any entity");
+            }
+            EntityDimensions dimensions = attachedEntity.getDimensions(attachedEntity.getPose());
             Vector3f n = new Vector3f(dimensions.width(), dimensions.height(), dimensions.width()).mul(0.5F);
             RandomSource random = instance.getLevel().getRandom();
             position.x = Mth.nextFloat(random, -n.x, n.x);
@@ -517,7 +526,7 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
                     MathHelper.applyEuler(MathHelper.getRandomEuler(instance.getLevel().getRandom()), speed.set(1, 0, 0));
                 } else {
                     speed.set(position);
-                    if (speed.lengthSquared() != 0.0F) {
+                    if (speed.x != 0.0F || speed.y != 0.0F || speed.z != 0.0F) {
                         speed.normalize();
                     }
                     if (this == INWARDS) speed.negate();

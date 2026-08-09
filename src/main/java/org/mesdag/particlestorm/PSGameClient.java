@@ -6,16 +6,22 @@ import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.CompareOp;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleProviderRegistry;
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.debug.DebugScreenEntry;
 import net.minecraft.client.gui.components.debug.DebugScreenEntries;
+import net.minecraft.client.gui.components.debug.DebugScreenEntryStatus;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.gizmos.GizmoStyle;
 import net.minecraft.gizmos.Gizmos;
@@ -25,20 +31,28 @@ import net.minecraft.world.phys.Vec3;
 import org.mesdag.particlestorm.api.IComponent;
 import org.mesdag.particlestorm.api.IEventNode;
 import org.mesdag.particlestorm.api.RegisterCustomComponentEvent;
+import org.mesdag.particlestorm.api.RegisterCustomEmitterTypeEvent;
 import org.mesdag.particlestorm.api.RegisterCustomEventNodeEvent;
 import org.mesdag.particlestorm.api.RegisterCustomParticleTypeEvent;
 import org.mesdag.particlestorm.data.component.*;
 import org.mesdag.particlestorm.data.event.*;
+import org.mesdag.particlestorm.mixin.DebugScreenEntriesAccessor;
 import org.mesdag.particlestorm.network.EmitterAttachPacketS2C;
 import org.mesdag.particlestorm.network.EmitterCreationPacketS2C;
 import org.mesdag.particlestorm.network.EmitterRemovalPacket;
 import org.mesdag.particlestorm.network.EmitterSynchronizePacket;
+import org.mesdag.particlestorm.particle.attach.EmitterAttachHandler;
 import org.mesdag.particlestorm.particle.MolangParticleInstance;
 import org.mesdag.particlestorm.particle.MolangParticleEngine;
 import org.mesdag.particlestorm.particle.ParticleEmitter;
 
+import java.nio.file.Files;
+
 public final class PSGameClient implements ClientModInitializer {
     public static final MolangParticleEngine LOADER = MolangParticleEngine.INSTANCE;
+    private static final Identifier MOLANG_PARTICLE_ENTRY = Identifier.withDefaultNamespace("molang_particle");
+    private static final Identifier PARTICLE_EMITTER_ENTRY = Identifier.withDefaultNamespace("particle_emitter");
+    private static boolean debugEntriesReady = false;
     public static final SingleQuadParticle.Layer PARTICLE_ADD = new SingleQuadParticle.Layer(
             true,
             TextureAtlas.LOCATION_PARTICLES,
@@ -69,10 +83,17 @@ public final class PSGameClient implements ClientModInitializer {
         registerComponents();
         registerEventNodes();
         RegisterCustomParticleTypeEvent.registerDefaults();
+        RegisterCustomEmitterTypeEvent.postEvent();
+        registerDebugEntries();
+        EmitterAttachHandler.postEvent();
 
         ParticleProviderRegistry.getInstance().register(ParticleStorm.MOLANG, new MolangParticleInstance.Provider());
         ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloadListener(MolangParticleEngine.RELOADER_ID, LOADER);
         ClientTickEvents.START_LEVEL_TICK.register(level -> tick());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            LOADER.removeAll();
+            EmitterAttachHandler.clearEmitters();
+        });
 
         ClientPlayNetworking.registerGlobalReceiver(EmitterCreationPacketS2C.TYPE, EmitterCreationPacketS2C::handleClient);
         ClientPlayNetworking.registerGlobalReceiver(EmitterAttachPacketS2C.TYPE, EmitterAttachPacketS2C::handleClient);
@@ -82,12 +103,39 @@ public final class PSGameClient implements ClientModInitializer {
 
     private static void tick() {
         Minecraft minecraft = Minecraft.getInstance();
+        enableDebugEntries(minecraft);
         LocalPlayer localPlayer = minecraft.player;
         if (localPlayer == null) {
             LOADER.removeAll();
         } else if (!minecraft.isPaused() && localPlayer.level().tickRateManager().runsNormally()) {
             LOADER.tick(localPlayer);
+            if (PSClientConfigs.emitterAutoRemoveIntervalTick <= 1 || localPlayer.level().getGameTime() % PSClientConfigs.emitterAutoRemoveIntervalTick == 0) {
+                Camera camera = minecraft.gameRenderer.getMainCamera();
+                if (camera.isInitialized()) {
+                    EmitterAttachHandler.tick(camera);
+                }
+            }
             collectEmitterGizmos();
+        }
+    }
+
+    private static void registerDebugEntries() {
+        if (DebugScreenEntries.getEntry(MOLANG_PARTICLE_ENTRY) != null) return;
+        DebugScreenEntriesAccessor.particlestorm$invokeRegister("molang_particle", (DebugScreenEntry) (displayer, level, levelChunk, otherChunk) ->
+                displayer.addLine("MolangParticle: " + LOADER.totalParticleCount()));
+        DebugScreenEntriesAccessor.particlestorm$invokeRegister("particle_emitter", (DebugScreenEntry) (displayer, level, levelChunk, otherChunk) ->
+                displayer.addLine("ParticleEmitter: " + LOADER.totalEmitterCount()));
+    }
+
+    /// Enable the two F3 entries by default on a fresh game directory only, so existing debug profile settings are never overwritten.
+    private static void enableDebugEntries(Minecraft minecraft) {
+        if (debugEntriesReady) return;
+        debugEntriesReady = true;
+        if (minecraft.debugEntries == null) return;
+        if (Files.exists(FabricLoader.getInstance().getGameDir().resolve("debug-profile.json"))) return;
+        if (minecraft.debugEntries.getStatus(MOLANG_PARTICLE_ENTRY) == DebugScreenEntryStatus.NEVER) {
+            minecraft.debugEntries.setStatus(MOLANG_PARTICLE_ENTRY, DebugScreenEntryStatus.IN_OVERLAY);
+            minecraft.debugEntries.setStatus(PARTICLE_EMITTER_ENTRY, DebugScreenEntryStatus.IN_OVERLAY);
         }
     }
 

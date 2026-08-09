@@ -31,13 +31,11 @@ public record ParticleInitialization(FloatMolangExp perRenderExpression, FloatMo
     @Override
     public void update(IMolangParticleInstance instance) {
         perRenderExpression.calculate(instance);
-        perUpdateExpression.calculate(instance);
     }
 
+    /// invoked through[EmitterShape#emittingParticle]
     @Override
-    public void apply(IMolangParticleInstance instance) {
-        perRenderExpression.calculate(instance);
-    }
+    public void apply(IMolangParticleInstance instance) {}
 
     @Override
     public boolean requireUpdate() {
@@ -46,14 +44,13 @@ public record ParticleInitialization(FloatMolangExp perRenderExpression, FloatMo
 
     @Override
     public int order() {
-        return 400;
+        return 800;
     }
 
     @Override
     public String toString() {
         return "ParticleInitialization{" +
                 "perRenderExpression=" + perRenderExpression +
-                ", perUpdateExpression=" + perUpdateExpression +
                 '}';
     }
 }
