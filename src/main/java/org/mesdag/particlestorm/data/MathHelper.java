@@ -5,14 +5,6 @@ import net.minecraft.util.RandomSource;
 import org.joml.Math;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
-import org.mesdag.particlestorm.data.molang.VariableTable;
-import org.mesdag.particlestorm.data.molang.compiler.MathValue;
-import org.mesdag.particlestorm.data.molang.compiler.value.CompoundValue;
-import org.mesdag.particlestorm.data.molang.compiler.value.Variable;
-import org.mesdag.particlestorm.data.molang.compiler.value.VariableAssignment;
-
-import java.util.List;
-import java.util.Map;
 
 public class MathHelper {
     public static Quaternionf setFromUnitVectors(Vector3f e, Vector3f t, Quaternionf dest) {
@@ -83,34 +75,5 @@ public class MathHelper {
         dest.set(Math.fma((xx - yy - zz + ww) * k, dest.x, Math.fma(2 * (xy - zw) * k, dest.y, (2 * (xz + yw) * k) * dest.z)),
                 Math.fma(2 * (xy + zw) * k, dest.x, Math.fma((yy - xx - zz + ww) * k, dest.y, (2 * (yz - xw) * k) * dest.z)),
                 Math.fma(2 * (xz - yw) * k, dest.x, Math.fma(2 * (yz + xw) * k, dest.y, ((zz - xx - yy + ww) * k) * dest.z)));
-    }
-
-    public static boolean forAssignment(Map<String, Variable> table, List<VariableAssignment> toInit, MathValue value) {
-        if (value instanceof VariableAssignment assignment) {
-            // 把赋值目标注册进预设表，保证变量在任意求值路径都可解析
-            table.put(assignment.name(), new Variable(assignment.name(), assignment.value()));
-            toInit.add(assignment);
-            return true;
-        }
-        return false;
-    }
-
-    public static void forCompound(Map<String, Variable> table, List<VariableAssignment> toInit, MathValue variable) {
-        if (variable instanceof CompoundValue(MathValue[] subValues)) {
-            for (MathValue value : subValues) {
-                forAssignment(table, toInit, value);
-            }
-        }
-    }
-
-    public static void redirect(List<VariableAssignment> toInit, VariableTable vars) {
-        for (VariableAssignment assignment : toInit) {
-            // 重定向，防止因找不到变量而爆栈
-            Variable variable = new Variable(assignment.name(), assignment.value());
-            if (!assignment.value().isMutable()) {
-                variable.markImmutable();
-            }
-            vars.setValue(variable.name(), variable);
-        }
     }
 }

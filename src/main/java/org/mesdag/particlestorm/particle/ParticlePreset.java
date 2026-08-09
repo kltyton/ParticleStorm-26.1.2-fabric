@@ -2,8 +2,7 @@ package org.mesdag.particlestorm.particle;
 
 import com.google.common.collect.Iterables;
 import net.minecraft.client.particle.ParticleRenderType;
-import net.neoforged.neoforge.common.NeoForge;
-import org.jetbrains.annotations.NotNull;
+import net.neoforged.fml.ModLoader;
 import org.jetbrains.annotations.Nullable;
 import org.mesdag.particlestorm.PSGameClient;
 import org.mesdag.particlestorm.api.IEventNode;
@@ -11,7 +10,6 @@ import org.mesdag.particlestorm.api.IParticleComponent;
 import org.mesdag.particlestorm.api.MolangInstance;
 import org.mesdag.particlestorm.api.ParticlePresetLoadedEvent;
 import org.mesdag.particlestorm.data.DefinedParticleEffect;
-import org.mesdag.particlestorm.data.MathHelper;
 import org.mesdag.particlestorm.data.component.*;
 import org.mesdag.particlestorm.data.curve.ParticleCurve;
 import org.mesdag.particlestorm.data.description.DescriptionMaterial;
@@ -19,12 +17,13 @@ import org.mesdag.particlestorm.data.event.NodeMolangExp;
 import org.mesdag.particlestorm.data.molang.FloatMolangExp;
 import org.mesdag.particlestorm.data.molang.MolangExp;
 import org.mesdag.particlestorm.data.molang.VariableTable;
-import org.mesdag.particlestorm.data.molang.compiler.MathValue;
 import org.mesdag.particlestorm.data.molang.compiler.MolangParser;
 import org.mesdag.particlestorm.data.molang.compiler.value.Variable;
-import org.mesdag.particlestorm.data.molang.compiler.value.VariableAssignment;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Hashtable;
+import java.util.List;
+import java.util.Map;
 
 import static org.mesdag.particlestorm.data.molang.compiler.MolangQueries.applyPrefixAliases;
 
@@ -38,10 +37,9 @@ public class ParticlePreset {
     public float invTextureWidth;
     public float invTextureHeight;
     public boolean motionDynamic;
-    public @Nullable FloatMolangExp perUpdateExpression;
+    public @Nullable ParticleInitialization initialization;
 
     public VariableTable vars;
-    public List<VariableAssignment> assignments;
 
     /// For custom preset data
     protected Map<Class<?>, Object> tickets;
@@ -80,7 +78,6 @@ public class ParticlePreset {
         ParticleMotionCollision motionCollision = (ParticleMotionCollision) effect.components.get(ParticleMotionCollision.ID);
         VariableTable table = new VariableTable(addDefaultVariables(), null);
         MolangParser parser = new MolangParser(table);
-        List<VariableAssignment> toInit = new ArrayList<>();
         if (motionCollision != null) {
             this.collisionEvents = motionCollision.events();
             for (ParticleMotionCollision.Event event : collisionEvents) {
@@ -95,9 +92,8 @@ public class ParticlePreset {
                 }
             }
         }
-        this.motionDynamic = effect.components.get(ParticleMotionDynamic.ID) != null;
-        ParticleInitialization initialization = (ParticleInitialization) effect.components.get(ParticleInitialization.ID);
-        if (initialization != null) this.perUpdateExpression = initialization.perUpdateExpression();
+        this.motionDynamic = effect.components.containsKey(ParticleMotionDynamic.ID);
+        this.initialization = (ParticleInitialization) effect.components.get(ParticleInitialization.ID);
         for (Map.Entry<String, ParticleCurve> entry : effect.curves.entrySet()) {
             ParticleCurve curve = entry.getValue();
             curve.input.compile(parser);
@@ -110,24 +106,14 @@ public class ParticlePreset {
             String name = applyPrefixAliases(entry.getKey(), "variable.", "v.");
             table.table.put(name, new Variable(name, p -> curve.calculate(p, name)));
         }
-        for (IParticleComponent component : Iterables.<@NotNull IParticleComponent>concat(effect.orderedParticleEarlyComponents, effect.orderedParticleComponents)) {
+        for (IParticleComponent component : Iterables.concat(effect.orderedParticleEarlyComponents, effect.orderedParticleComponents)) {
+            assert component != null;
             for (MolangExp exp : component.getAllMolangExp()) {
-                compileAndInitAssignments(exp, parser, toInit);
+                exp.compile(parser);
             }
         }
         this.vars = table;
-        this.assignments = toInit;
-        NeoForge.EVENT_BUS.post(new ParticlePresetLoadedEvent(effect, this));
-    }
-
-    private static void compileAndInitAssignments(MolangExp exp, MolangParser parser, List<VariableAssignment> toInit) {
-        exp.compile(parser);
-        MathValue variable = exp.getVariable();
-        if (variable == null) return;
-        Map<String, Variable> table = parser.table().table;
-        if (!MathHelper.forAssignment(table, toInit, variable)) {
-            MathHelper.forCompound(table, toInit, variable);
-        }
+        ModLoader.postEvent(new ParticlePresetLoadedEvent(this));
     }
 
     public <T> void setTicket(Class<T> clazz, T value) {
