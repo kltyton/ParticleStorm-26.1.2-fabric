@@ -41,15 +41,17 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
     @Override
     public void update(ParticleEmitter emitter) {
         if (emitter.spawned) return;
-        if (emitter.spawnDuration <= 1 || emitter.age % emitter.spawnDuration == 0) {
-            for (int num = 0; num < emitter.spawnRate; num++) {
-                if (hasSpaceInParticleLimit(emitter)) {
-                    emittingParticle(emitter);
-                }
+        int count = emitter.spawnRate;
+        if (emitter.spawnChance > 0.0F && emitter.level.random.nextFloat() < emitter.spawnChance) {
+            count++;
+        }
+        for (int num = 0; num < count; num++) {
+            if (hasSpaceInParticleLimit(emitter)) {
+                emittingParticle(emitter);
             }
-            if (emitter.getPreset().emitterRateType == EmitterRate.Type.INSTANT) {
-                emitter.spawned = true;
-            }
+        }
+        if (emitter.getPreset().emitterRateType == EmitterRate.Type.INSTANT) {
+            emitter.spawned = true;
         }
     }
 
@@ -84,6 +86,7 @@ public abstract sealed class EmitterShape implements IEmitterComponent permits E
 
         if (emitter.isLocalSpace()) {
             if (!emitter.getPreset().localPosition) {
+                position.mulDirection(emitter.getLocalSpace());
                 Vec3 emitterPos = emitter.getPosition();
                 position.add((float) emitterPos.x, (float) emitterPos.y, (float) emitterPos.z);
             }

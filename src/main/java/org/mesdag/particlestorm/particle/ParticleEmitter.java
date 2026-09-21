@@ -11,7 +11,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Matrix4f;
+import org.joml.Matrix4x3f;
 import org.joml.Vector3f;
 import org.mesdag.particlestorm.ParticleStorm;
 import org.mesdag.particlestorm.api.IEmitterComponent;
@@ -37,7 +37,7 @@ public class ParticleEmitter implements MolangInstance {
     public ResourceLocation particleId;
     public MolangExp expression;
 
-    private transient Matrix4f localSpace;
+    private transient Matrix4x3f localSpace;
 
     protected transient EmitterPreset preset;
     protected transient VariableTable vars;
@@ -62,7 +62,7 @@ public class ParticleEmitter implements MolangInstance {
     public transient int activeTime;
     public transient int fullLoopTime;
     public transient MutableParticleGroup particleGroup;
-    public transient int spawnDuration = 1;
+    public transient float spawnChance;
     public transient int spawnRate;
     public transient boolean spawned;
     protected transient Entity attached;
@@ -143,7 +143,7 @@ public class ParticleEmitter implements MolangInstance {
         addParent(parent);
         createVars();
         for (String name : effect.sharedVars()) {
-            Variable variable = parent.getVars().table.get(name);
+            Variable variable = parent.getVars().getVariable(name);
             if (variable == null) throw new IllegalArgumentException("Shared vars must defined in parent directly!");
             vars.table.put(name, variable);
         }
@@ -196,6 +196,7 @@ public class ParticleEmitter implements MolangInstance {
     protected void initVars() {
         if (expression != null && !expression.initialized()) {
             expression.compile(new MolangParser(vars));
+            expression.calculate(this);
         }
     }
 
@@ -217,16 +218,6 @@ public class ParticleEmitter implements MolangInstance {
         this.invTickRate = 1.0F / level.tickRateManager().tickrate();
         this.moveDistO = moveDist;
         this.posO = pos;
-        for (IEmitterComponent component : components) {
-            if (active || component instanceof EmitterLifetime.Looping) {
-                component.update(this);
-            }
-        }
-        this.age++;
-
-        if (!posO.equals(pos)) {
-            this.moveDist += (float) pos.subtract(posO).length();
-        }
 
         if (attached != null) {
             if (attached.isRemoved()) {
@@ -241,6 +232,17 @@ public class ParticleEmitter implements MolangInstance {
             }
             BlockPos bp = attachedBlock.getBlockPos();
             updatePos(bp.getX() + 0.5, bp.getY(), bp.getZ() + 0.5);
+        }
+
+        for (IEmitterComponent component : components) {
+            if (active || component instanceof EmitterLifetime.Looping) {
+                component.update(this);
+            }
+        }
+        this.age++;
+
+        if (!posO.equals(pos)) {
+            this.moveDist += (float) pos.subtract(posO).length();
         }
 
         if (afterParentInit != null && parent != null) {
@@ -283,18 +285,26 @@ public class ParticleEmitter implements MolangInstance {
         return localSpace != null;
     }
 
-    public final Matrix4f getLocalSpace() {
+    public final Matrix4x3f getLocalSpace() {
         return localSpace;
     }
 
-    public final void setLocalSpace(@Nullable Matrix4f space) {
+    public final void setLocalSpace(@Nullable Matrix4x3f space) {
         setLocalSpace(space, true);
     }
 
-    public final void setLocalSpace(@Nullable Matrix4f space, boolean updatePos) {
+    public final void setLocalSpace(@Nullable Matrix4x3f space, boolean updatePos) {
         this.localSpace = space;
         if (updatePos) {
-            updatePos(getX(), getY(), getZ());
+            // 以附着实体/方块位置为基准（与tick一致），保证重复调用不会累加localSpace的平移
+            if (attached != null) {
+                updatePos(attached.getX(), attached.getY(), attached.getZ());
+            } else if (attachedBlock != null) {
+                BlockPos bp = attachedBlock.getBlockPos();
+                updatePos(bp.getX() + 0.5, bp.getY(), bp.getZ() + 0.5);
+            } else {
+                updatePos(getX(), getY(), getZ());
+            }
         }
     }
 
